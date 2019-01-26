@@ -6,5 +6,6 @@ dependencies:
   - orekit==9.2
   - jupyter
   - requests # Used for making requests to the laser ranging data API
+  - numpy
   - pip:
     - spacetrack
