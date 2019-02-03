@@ -10,8 +10,12 @@ Prerequisites:
 Install the conda environment. For this, you can either import the environment.yml file into Anaconda Navigator, or use the command line
  `conda env create -f environment.yml`
 
+Optional: install Jupyter Lab extensions. I recommend:
+* Table of contents: `jupyter labextension install @jupyterlab/toc`
+* Variable inspect: `jupyter labextension install @lckr/jupyterlab_variableinspector`
+
 # Use
 
 * Enter conda environment: `source activate conda` (or start a terminal directly in the environment using Anaconda Navigator)
-* Start Jupyter: `jupyter notebook`
-* The Jupyter Notebook should pop up in your browser at the URL http://localhost:8888
+* Start Jupyter Lab: `jupyter lab`
+* Jupyter Lab should pop up in your browser at the URL http://localhost:8888

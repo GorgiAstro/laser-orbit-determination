@@ -5,7 +5,11 @@ dependencies:
   - python==3.7
   - orekit==9.2
   - jupyter
+  - jupyterlab
   - requests # Used for making requests to the laser ranging data API
   - numpy
+  - pandas
+  - matplotlib
+  - nodejs # For installing Jupyter lab extensions
   - pip:
     - spacetrack
