@@ -19,3 +19,7 @@ Optional: install Jupyter Lab extensions. I recommend:
 * Enter conda environment: `source activate conda` (or start a terminal directly in the environment using Anaconda Navigator)
 * Start Jupyter Lab: `jupyter lab`
 * Jupyter Lab should pop up in your browser at the URL http://localhost:8888
+
+# Issues
+
+* It seems that the password input does not work in the latest versions of Firefox (as of 01.02.2019). However, it works in Chrome

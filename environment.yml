@@ -2,7 +2,7 @@ name: laserod
 channels:
   - conda-forge
 dependencies:
-  - python==3.7
+  - python==3.7.2
   - orekit==9.2
   - jupyter
   - jupyterlab
