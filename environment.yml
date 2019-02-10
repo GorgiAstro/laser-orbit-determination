@@ -11,5 +11,6 @@ dependencies:
   - pandas
   - matplotlib
   - nodejs # For installing Jupyter lab extensions
+  - plotly
   - pip:
     - spacetrack

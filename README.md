@@ -2,15 +2,43 @@
 
 This repository provides examples for orbit determination based on laser ranging data, in the form of Jupyter Notebooks.
 
-# Installation
-
-Prerequisites:
+# Prerequisites
 * Anaconda or Miniconda
 
-Install the conda environment. For this, you can either import the environment.yml file into Anaconda Navigator, or use the command line
- `conda env create -f environment.yml`
+# Installation
 
-Optional: install Jupyter Lab extensions. I recommend:
+Install the conda environment. For this, you can either import the environment.yml file into Anaconda Navigator, or use the command line
+`conda env create -f environment.yml`
+
+If the environment already exists, update it using:
+`conda env update -f environment.yml`
+
+# Install Jupyter Lab extensions
+## Mandatory extensions
+The following extensions are required to use Plotly offline in notebooks:
+
+```
+# Enter conda environment
+source activate laserod
+
+# Jupyter widgets extension
+jupyter labextension install @jupyter-widgets/jupyterlab-manager --no-build
+
+# FigureWidget support
+jupyter labextension install plotlywidget --no-build
+
+# offline iplot support
+jupyter labextension install @jupyterlab/plotly-extension --no-build
+
+# JupyterLab chart editor support (optional)
+jupyter labextension install jupyterlab-chart-editor --no-build
+
+# Build extensions (must be done to activate extensions since --no-build is used above)
+jupyter lab build
+```
+
+## Recommended extensions
+I recommend the following two extensions:
 * Table of contents: `jupyter labextension install @jupyterlab/toc`
 * Variable inspect: `jupyter labextension install @lckr/jupyterlab_variableinspector`
 
