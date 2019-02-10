@@ -16,7 +16,7 @@ Optional: install Jupyter Lab extensions. I recommend:
 
 # Use
 
-* Enter conda environment: `source activate conda` (or start a terminal directly in the environment using Anaconda Navigator)
+* Enter conda environment: `source activate laserod` (or start a terminal directly in the environment using Anaconda Navigator)
 * Start Jupyter Lab: `jupyter lab`
 * Jupyter Lab should pop up in your browser at the URL http://localhost:8888
 

@@ -2,8 +2,8 @@ name: laserod
 channels:
   - conda-forge
 dependencies:
-  - python==3.7.2
-  - orekit==9.2
+  - python>=3.7
+  - orekit==9.3
   - jupyter
   - jupyterlab
   - requests # Used for making requests to the laser ranging data API
