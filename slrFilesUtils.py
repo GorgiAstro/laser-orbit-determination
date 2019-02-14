@@ -1,4 +1,4 @@
-def parseCrdFile(crdFileName):
+def parseStationData(stationDataFile):
     from org.orekit.utils import IERSConventions
     from org.orekit.frames import FramesFactory
     itrf = FramesFactory.getITRF(IERSConventions.IERS_2010, True)
@@ -10,9 +10,10 @@ def parseCrdFile(crdFileName):
     from org.orekit.estimation.measurements import GroundStation
     from numpy import deg2rad
 
-    stationData = {}
+    import pandas as pd
+    stationData = pd.Series()
 
-    with open(crdFileName) as f:
+    with open(stationDataFile) as f:
         line = ''
         while not line.startswith('+SITE/ID'):
             line = f.readline()
@@ -38,4 +39,4 @@ def parseCrdFile(crdFileName):
     return stationData
 
 if __name__ == "__main__":
-    parseCrdFile('SLRF2014_POS+VEL_2030.0_180504.snx')
+    parseStationData('SLRF2014_POS+VEL_2030.0_180504.snx')
