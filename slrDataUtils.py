@@ -167,6 +167,13 @@ def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
 
     return slrDataFrame
 
+def orekitPV2dataframe(PV, currentDateTime):
+    import pandas as pd
+    pos = PV.getPosition()
+    vel = PV.getVelocity()
+    data = {'x': pos.getX(), 'y': pos.getY(), 'z': pos.getZ(),
+            'vx': vel.getX(), 'vy': vel.getY(), 'vz': vel.getZ()}
+    return pd.DataFrame(data, index=[currentDateTime])
 
 if __name__ == "__main__":
     parseStationData('SLRF2014_POS+VEL_2030.0_180504.snx')
