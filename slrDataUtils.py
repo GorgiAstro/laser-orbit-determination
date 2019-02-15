@@ -38,14 +38,15 @@ def parseStationData(stationDataFile):
     return stationData
 
 
-def queryNptData(username_edc, password_edc, url, cosparId, startDate, endDate):
+def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate, endDate):
+    # dataType: 'NPT' or 'FRD'
     import requests
     import json
     search_args = {}
     search_args['username'] = username_edc
     search_args['password'] = password_edc
     search_args['action'] = 'data-query'
-    search_args['data_type'] = 'NPT'  # Normal pointing data
+    search_args['data_type'] = dataType  # Normal pointing data
     search_args['satellite'] = cosparId
 
     station_args = {}
@@ -79,9 +80,9 @@ def queryNptData(username_edc, password_edc, url, cosparId, startDate, endDate):
 
                     leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
                     datasetList = datasetList.append(leDataSet)
-                    print('Observation Id: {}  -  Station: {}  -  Date: {}'.format(observation['id'],
-                                                                                   observation['station'],
-                                                                                   observation['end_data_date']))
+                    # print('Observation Id: {}  -  Station: {}  -  Date: {}'.format(observation['id'],
+                    #                                                               observation['station'],
+                    #                                                               observation['end_data_date']))
 
         else:
             print(search_response.status_code)
@@ -91,7 +92,7 @@ def queryNptData(username_edc, password_edc, url, cosparId, startDate, endDate):
     return datasetList
 
 
-def downloadNptData(username_edc, password_edc, url, datasetList):
+def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
     import requests
     import json
     from datetime import datetime
@@ -102,10 +103,10 @@ def downloadNptData(username_edc, password_edc, url, datasetList):
     dl_args['username'] = username_edc
     dl_args['password'] = password_edc
     dl_args['action'] = 'data-download'
-    dl_args['data_type'] = 'NPT'
+    dl_args['data_type'] = dataType
 
     import pandas as pd
-    nptDataFrame = pd.DataFrame(columns=['station-id', 'range'])
+    slrDataFrame = pd.DataFrame(columns=['station-id', 'range'])
 
     for datasetId, dataset in datasetList.iterrows():
         dl_args['id'] = str(datasetId)
@@ -131,11 +132,12 @@ def downloadNptData(username_edc, password_edc, url, datasetList):
             d = int(lineData[4])
             measurementDay = datetime(y, m, d)
 
-            while (not currentLine.startswith('11')) and i < n:  # Reading lines until the start of normal point data
+            while (not (currentLine.startswith('11') or currentLine.startswith('10'))) and i < n:  # Reading lines until the start of normal point data
                 currentLine = data[i]
                 i += 1
 
-            while currentLine.startswith('11') and i < n:  # Reading until the end of normal point data
+            while (currentLine.startswith('11') or currentLine.startswith('10'))\
+                    and i < n:  # Reading until the end of normal point data
                 lineData = currentLine.split()
                 timeOfDay = float(lineData[1])
                 timeOfFlight = float(lineData[2])
@@ -151,10 +153,10 @@ def downloadNptData(username_edc, password_edc, url, datasetList):
                 bounceTime = transmitTime + timedelta(seconds=timeOfFlight / 2)
                 receiveTime = bounceTime + timedelta(seconds=timeOfFlight / 2)
 
-                # print('Transmit time: {}, receive time: {}'.format(transmitTime, receiveTime))
-                # print('Time of flight: {} milliseconds, satellite range: {} kilometers'.format(timeOfFlight*1000, r/1000))
-                # print('')
-                nptDataFrame.loc[receiveTime] = [dataset['station'], r]
+                #print('Transmit time: {}, receive time: {}'.format(transmitTime, receiveTime))
+                #print('Time of flight: {} milliseconds, satellite range: {} kilometers'.format(timeOfFlight*1000, r/1000))
+                #print('')
+                slrDataFrame.loc[receiveTime] = [dataset['station'], r]
 
                 currentLine = data[i]
                 i += 1
@@ -163,7 +165,8 @@ def downloadNptData(username_edc, password_edc, url, datasetList):
             print(dl_response.status_code)
             print(dl_response.text)
 
-    return nptDataFrame
+    return slrDataFrame
+
 
 if __name__ == "__main__":
     parseStationData('SLRF2014_POS+VEL_2030.0_180504.snx')
