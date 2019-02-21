@@ -37,6 +37,99 @@ def parseStationData(stationDataFile):
 
     return stationData
 
+def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
+    import requests
+    import json
+    search_args = {}
+    search_args['username'] = username_edc
+    search_args['password'] = password_edc
+    search_args['action'] = 'data-query'
+    search_args['data_type'] = 'CPF'
+    search_args['satellite'] = cosparId
+
+    from datetime import datetime
+    from datetime import timedelta
+
+    import pandas as pd
+    datasetList = pd.DataFrame()
+
+    search_args['start_data_date'] = '{:%Y-%m-%d}%'.format(startDate) # Data will start at midnight
+
+    search_response = requests.post(url, data=search_args)
+
+    if search_response.status_code == 200:
+        search_data = json.loads(search_response.text)
+
+        for observation in search_data:
+            startDataDate = datetime.strptime(observation['start_data_date'], '%Y-%m-%d %H:%M:%S')
+            endDataDate = datetime.strptime(observation['end_data_date'], '%Y-%m-%d %H:%M:%S')
+
+            leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
+            datasetList = datasetList.append(leDataSet)
+
+    else:
+        print(search_response.status_code)
+        print(search_response.text)
+
+    datasetList.drop('id', axis=1, inplace=True)
+
+    return datasetList
+
+def dlAndParseCpfData(username_edc, password_edc, url, datasetList, startDate, endDate):
+    # The data is truncated within the given time frame
+    import requests
+    import json
+    from datetime import datetime
+    from datetime import timedelta
+    from org.orekit.time import AbsoluteDate
+    from org.orekit.time import TimeScalesFactory
+    from orekit.pyhelpers import absolutedate_to_datetime
+    utc = TimeScalesFactory.getUTC()
+
+    dl_args = {}
+    dl_args['username'] = username_edc
+    dl_args['password'] = password_edc
+    dl_args['action'] = 'data-download'
+    dl_args['data_type'] = 'CPF'
+
+    import pandas as pd
+    cpfDataFrame = pd.DataFrame(columns=['x', 'y', 'z'])
+
+    for datasetId, dataset in datasetList.iterrows():
+        dl_args['id'] = str(datasetId)
+        dl_response = requests.post(url, data=dl_args)
+
+        if dl_response.status_code == 200:
+            """ convert json string in python list """
+            data = json.loads(dl_response.text)
+
+            currentLine = ''
+            i = 0
+            n = len(data)
+
+            while (not currentLine.startswith('10')) and i < n:  # Reading lines until the H4 header
+                currentLine = data[i]
+                i += 1
+
+            while currentLine.startswith('10') and i < n:
+                lineData = currentLine.split()
+                mjd_day = int(lineData[2])
+                secondOfDay = float(lineData[3])
+                position_ecef = [float(lineData[5]), float(lineData[6]), float(lineData[7])]
+                absolutedate = AbsoluteDate.createMJDDate(mjd_day, secondOfDay, utc)
+                currentdatetime = absolutedate_to_datetime(absolutedate)
+
+                if (currentdatetime >= startDate) and (currentdatetime <= endDate):
+                    cpfDataFrame.loc[currentdatetime] = position_ecef
+
+                currentLine = data[i]
+                i += 1
+
+        else:
+            print(dl_response.status_code)
+            print(dl_response.text)
+
+    return cpfDataFrame
 
 def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate, endDate):
     # dataType: 'NPT' or 'FRD'
@@ -46,13 +139,8 @@ def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate,
     search_args['username'] = username_edc
     search_args['password'] = password_edc
     search_args['action'] = 'data-query'
-    search_args['data_type'] = dataType  # Normal pointing data
+    search_args['data_type'] = dataType
     search_args['satellite'] = cosparId
-
-    station_args = {}
-    station_args['username'] = username_edc
-    station_args['password'] = password_edc
-    station_args['action'] = 'station-info'
 
     from datetime import datetime
     from datetime import timedelta
@@ -75,8 +163,8 @@ def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate,
                 startDataDate = datetime.strptime(observation['start_data_date'], '%Y-%m-%d %H:%M:%S')
                 endDataDate = datetime.strptime(observation['end_data_date'], '%Y-%m-%d %H:%M:%S')
 
-                if (startDataDate > startDate) and (
-                        endDataDate < endDate):  # Only taking the values within the date range
+                if (startDataDate >= startDate) and (
+                        endDataDate <= endDate):  # Only taking the values within the date range
 
                     leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
                     datasetList = datasetList.append(leDataSet)
