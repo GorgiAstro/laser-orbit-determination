@@ -1,26 +1,37 @@
-def parseStationData(stationDataFile):
+def epochStringToDatetime(epochString):
+    from datetime import datetime, timedelta
+    epochData = [int(d) for d in epochString.split(':')]
+    referenceEpoch = datetime(epochData[0] + 2000, 1, 1) + timedelta(days=epochData[1] - 1) + timedelta(seconds=epochData[2])
+    return referenceEpoch
+
+def parseStationData(stationFile, epoch):
     from org.orekit.utils import IERSConventions
     from org.orekit.frames import FramesFactory
     itrf = FramesFactory.getITRF(IERSConventions.IERS_2010, True)
     from org.orekit.models.earth import ReferenceEllipsoid
     wgs84ellipsoid = ReferenceEllipsoid.getWgs84(itrf)
 
+    from org.hipparchus.geometry.euclidean.threed import Vector3D
     from org.orekit.bodies import GeodeticPoint
     from org.orekit.frames import TopocentricFrame
     from org.orekit.estimation.measurements import GroundStation
-    from numpy import deg2rad
+    from numpy import deg2rad, rad2deg
+    from orekit.pyhelpers import datetime_to_absolutedate
 
     import pandas as pd
-    stationData = pd.Series()
+    stationData = pd.DataFrame(columns=['Code', 'PT', 'Latitude', 'Longitude', 'Altitude', 'OrekitGroundStation'])
 
-    with open(stationDataFile) as f:
+    # First run on the file to initialize the ground stations using the approximate lat/lon/alt data
+    with open(stationFile) as f:
         line = ''
         while not line.startswith('+SITE/ID'):
             line = f.readline()
-        line = f.readline() # Skipping +SITE/ID
+        line = f.readline()  # Skipping +SITE/ID
         line = f.readline()  # Skipping column header
 
         while not line.startswith('-SITE/ID'):
+            stationCode = int(line[1:5])
+            pt = line[7]
             l = line[44:]
             lon_deg = float(l[0:3]) + float(l[3:6]) / 60.0 + float(l[6:11]) / 60.0 / 60.0
             lat_deg = float(l[12:15]) + float(l[15:18]) / 60.0 + float(l[18:23]) / 60.0 / 60.0
@@ -28,12 +39,51 @@ def parseStationData(stationDataFile):
             station_id = l[36:44]
 
             geodeticPoint = GeodeticPoint(float(deg2rad(lat_deg)), float(deg2rad(lon_deg)), alt_m)
-            topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, station_id)
+            topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, str(station_id))
             groundStation = GroundStation(topocentricFrame)
 
-            stationData[station_id] = groundStation
+            stationData.loc[station_id] = [stationCode, pt, lat_deg, lon_deg, alt_m, groundStation]
 
             line = f.readline()
+
+    # Doing a second run on the file to find the beginning of the accurate station data
+    with open(stationFile) as f:
+        line = ''
+        for num, line in enumerate(f, 1):
+            if '+SOLUTION/ESTIMATE' in line:
+                break
+    lineNumberStart = num + 1  # skipping table header
+
+    # Parsing the end of the file using Pandas' CSV parser
+    stationDataCsv = pd.read_csv(stationFile, engine='python',
+                                 names=['INDEX', 'TYPE', 'CODE', 'PT', 'SOLN', 'REF_EPOCH', 'UNIT', 'S',
+                                        'ESTIMATED_VALUE', 'STD_DEV'],
+                                 index_col=['CODE', 'PT'],
+                                 sep='\s+|\t+|\s+\t+|\t+\s+', skiprows=lineNumberStart, skipfooter=2)
+
+    # Replacing the year:dayInYear:secondsInDay strings by datetime objects
+    stationDataCsv['REF_EPOCH'] = stationDataCsv['REF_EPOCH'].apply(lambda x: epochStringToDatetime(x))
+    # Computing a pivot table to have columns [STAX, STAY, STAZ, VELX, VELY, VELZ] containing the position/velocity values
+    pivotTable = stationDataCsv.pivot_table(index=['CODE', 'PT'], columns=['TYPE'], values=['ESTIMATED_VALUE'])
+
+    # A loop is needed here to create the Orekit objects
+    for stationId, staData in stationData.iterrows():
+        indexTuple = (staData['Code'], staData['PT'])
+        refEpoch = stationDataCsv.loc[indexTuple]['REF_EPOCH'][0]
+        yearsSinceEpoch = (epoch - refEpoch).days / 365.25
+
+        pv = pivotTable.loc[indexTuple]['ESTIMATED_VALUE']
+        x = float(pv['STAX'] + pv['VELX'] * yearsSinceEpoch)
+        y = float(pv['STAY'] + pv['VELY'] * yearsSinceEpoch)
+        z = float(pv['STAZ'] + pv['VELZ'] * yearsSinceEpoch)
+        station_xyz_m = Vector3D(x, y, z)
+        geodeticPoint = wgs84ellipsoid.transform(station_xyz_m, itrf, datetime_to_absolutedate(epoch))
+        lon_deg = rad2deg(geodeticPoint.getLongitude())
+        lat_deg = rad2deg(geodeticPoint.getLatitude())
+        alt_m = geodeticPoint.getAltitude()
+        topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, str(indexTuple[0]))
+        groundStation = GroundStation(topocentricFrame)
+        stationData.loc[stationId] = [staData['Code'], staData['PT'], lat_deg, lon_deg, alt_m, groundStation]
 
     return stationData
 
@@ -48,7 +98,6 @@ def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
     search_args['satellite'] = cosparId
 
     from datetime import datetime
-    from datetime import timedelta
 
     import pandas as pd
     datasetList = pd.DataFrame()
@@ -79,8 +128,6 @@ def dlAndParseCpfData(username_edc, password_edc, url, datasetList, startDate, e
     # The data is truncated within the given time frame
     import requests
     import json
-    from datetime import datetime
-    from datetime import timedelta
     from org.orekit.time import AbsoluteDate
     from org.orekit.time import TimeScalesFactory
     from orekit.pyhelpers import absolutedate_to_datetime
@@ -212,8 +259,6 @@ def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
                 currentLine = data[i]
                 i += 1
 
-            # print(currentLine)
-
             lineData = currentLine.split()  # Reading day in H4 header
             y = int(lineData[2])
             m = int(lineData[3])
@@ -262,6 +307,3 @@ def orekitPV2dataframe(PV, currentDateTime):
     data = {'x': pos.getX(), 'y': pos.getY(), 'z': pos.getZ(),
             'vx': vel.getX(), 'vy': vel.getY(), 'vz': vel.getZ()}
     return pd.DataFrame(data, index=[currentDateTime])
-
-if __name__ == "__main__":
-    parseStationData('SLRF2014_POS+VEL_2030.0_180504.snx')
