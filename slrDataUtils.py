@@ -23,7 +23,7 @@ def parseStationData(stationFile, stationEccFile, epoch):
     from orekit.pyhelpers import datetime_to_absolutedate
 
     import pandas as pd
-    stationData = pd.DataFrame(columns=['Code', 'PT', 'Latitude', 'Longitude', 'Altitude', 'OrekitGroundStation'])
+    stationData = pd.DataFrame(columns=['CODE', 'PT', 'Latitude', 'Longitude', 'Altitude', 'OrekitGroundStation'])
     stationxyz = pd.DataFrame(columns=['CODE', 'PT', 'TYPE', 'SOLN', 'REF_EPOCH',
                                    'UNIT', 'S', 'ESTIMATED_VALUE', 'STD_DEV'])
 
@@ -39,17 +39,17 @@ def parseStationData(stationFile, stationEccFile, epoch):
             stationCode = int(line[1:5])
             pt = line[7]
             l = line[44:]
-            lon_deg = float(l[0:3]) + float(l[3:6]) / 60.0 + float(l[6:11]) / 60.0 / 60.0
-            lat_deg = float(l[12:15]) + float(l[15:18]) / 60.0 + float(l[18:23]) / 60.0 / 60.0
-            alt_m = float(l[24:31])
+            #lon_deg = float(l[0:3]) + float(l[3:6]) / 60.0 + float(l[6:11]) / 60.0 / 60.0
+            #lat_deg = float(l[12:15]) + float(l[15:18]) / 60.0 + float(l[18:23]) / 60.0 / 60.0
+            #alt_m = float(l[24:31])
             station_id = l[36:44]
 
-            geodeticPoint = GeodeticPoint(float(deg2rad(lat_deg)), float(deg2rad(lon_deg)), alt_m)
-            topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, str(station_id))
-            groundStation = GroundStation(topocentricFrame)
+            #geodeticPoint = GeodeticPoint(float(deg2rad(lat_deg)), float(deg2rad(lon_deg)), alt_m)
+            #topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, str(station_id))
+            #groundStation = GroundStation(topocentricFrame)
 
-            stationData.loc[station_id] = [stationCode, pt, lat_deg, lon_deg, alt_m, groundStation]
-
+            #stationData.loc[station_id] = [stationCode, pt, lat_deg, lon_deg, alt_m, groundStation]
+            stationData.loc[station_id, ['CODE', 'PT']] = [stationCode, pt] # Only filling the station code and id
             line = f.readline()        
 
         # Parsing accurate ground station position from XYZ
@@ -96,7 +96,7 @@ def parseStationData(stationFile, stationEccFile, epoch):
 
     # A loop is needed here to create the Orekit objects
     for stationId, staData in stationData.iterrows():
-        indexTuple = (staData['Code'], staData['PT'])
+        indexTuple = (staData['CODE'], staData['PT'])
         refEpoch = stationxyz.loc[indexTuple]['REF_EPOCH'][0]
         yearsSinceEpoch = (epoch - refEpoch).days / 365.25
 
@@ -111,7 +111,7 @@ def parseStationData(stationFile, stationEccFile, epoch):
         alt_m = geodeticPoint.getAltitude()
         topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, str(indexTuple[0]))
         groundStation = GroundStation(topocentricFrame)
-        stationData.loc[stationId] = [staData['Code'], staData['PT'], lat_deg, lon_deg, alt_m, groundStation]
+        stationData.loc[stationId] = [staData['CODE'], staData['PT'], lat_deg, lon_deg, alt_m, groundStation]
 
     return stationData
 
