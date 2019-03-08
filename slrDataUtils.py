@@ -1,7 +1,11 @@
 def epochStringToDatetime(epochString):
     from datetime import datetime, timedelta
     epochData = [int(d) for d in epochString.split(':')]
-    referenceEpoch = datetime(epochData[0] + 2000, 1, 1) + timedelta(days=epochData[1] - 1) + timedelta(seconds=epochData[2])
+    if epochData[0] > 50: # 20th century
+        epochYear = epochData[0] + 1900
+    else:
+        epochYear = epochData[0] + 2000
+    referenceEpoch = datetime(epochYear, 1, 1) + timedelta(days=epochData[1] - 1) + timedelta(seconds=epochData[2])
     return referenceEpoch
 
 def parseStationData(stationFile, epoch):
