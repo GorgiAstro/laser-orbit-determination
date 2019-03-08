@@ -24,6 +24,8 @@ def parseStationData(stationFile, stationEccFile, epoch):
 
     import pandas as pd
     stationData = pd.DataFrame(columns=['Code', 'PT', 'Latitude', 'Longitude', 'Altitude', 'OrekitGroundStation'])
+    stationxyz = pd.DataFrame(columns=['CODE', 'PT', 'TYPE', 'SOLN', 'REF_EPOCH',
+                                   'UNIT', 'S', 'ESTIMATED_VALUE', 'STD_DEV'])
 
     # First run on the file to initialize the ground stations using the approximate lat/lon/alt data
     with open(stationFile) as f:
@@ -48,27 +50,36 @@ def parseStationData(stationFile, stationEccFile, epoch):
 
             stationData.loc[station_id] = [stationCode, pt, lat_deg, lon_deg, alt_m, groundStation]
 
-            line = f.readline()
+            line = f.readline()        
 
-    # Doing a second run on the file to find the beginning of the accurate station data
-    with open(stationFile) as f:
-        for num, line in enumerate(f, 1):
-            if '+SOLUTION/ESTIMATE' in line:
-                break
-    lineNumberStart = num + 1  # skipping table header
+        # Parsing accurate ground station position from XYZ
+        while not line.startswith('+SOLUTION/ESTIMATE'):
+            line = f.readline()        
 
-    # Parsing the end of the file using Pandas' CSV parser
-    stationDataCsv = pd.read_csv(stationFile, engine='python',
-                                 names=['INDEX', 'TYPE', 'CODE', 'PT', 'SOLN', 'REF_EPOCH', 'UNIT', 'S',
-                                        'ESTIMATED_VALUE', 'STD_DEV'],
-                                 index_col=['CODE', 'PT'],
-                                 sep='\s+|\t+|\s+\t+|\t+\s+', skiprows=lineNumberStart, skipfooter=2)
+        line = f.readline()  # Skipping +SOLUTION/ESTIMATE
+        line = f.readline()  # Skipping column header
 
-    # Replacing the year:dayInYear:secondsInDay strings by datetime objects
-    stationDataCsv['REF_EPOCH'] = stationDataCsv['REF_EPOCH'].apply(lambda x: epochStringToDatetime(x))
-    # Computing a pivot table to have columns [STAX, STAY, STAZ, VELX, VELY, VELZ] containing the position/velocity values
-    pivotTable = stationDataCsv.pivot_table(index=['CODE', 'PT'], columns=['TYPE'], values=['ESTIMATED_VALUE'])
+        while not line.startswith('-SOLUTION/ESTIMATE'):
+            index = int(line[1:6])
+            lineType = line[7:11]
+            code = int(line[14:18])
+            pt = line[20:21]
+            soln = int(line[22:26])
+            refEpochStr = line[27:39]       
+            refEpoch = epochStringToDatetime(refEpochStr)
+            unit = line[40:44]
+            s = int(line[45:46])
+            estimatedValue = float(line[47:68])
+            stdDev = float(line[69:80]) 
 
+            stationxyz.loc[index] = [code, pt, lineType, soln, refEpoch, 
+                                             unit, s, estimatedValue, stdDev]
+            line = f.readline() 
+
+    pivotTable = stationxyz.pivot_table(index=['CODE', 'PT'], 
+                                        columns=['TYPE'], 
+                                        values=['ESTIMATED_VALUE', 'STD_DEV'])
+    stationxyz.set_index(['CODE', 'PT'], inplace = True)            
     # Reading the eccentricities data
     with open(stationEccFile) as f:
         for num, line in enumerate(f, 1):
@@ -86,7 +97,7 @@ def parseStationData(stationFile, stationEccFile, epoch):
     # A loop is needed here to create the Orekit objects
     for stationId, staData in stationData.iterrows():
         indexTuple = (staData['Code'], staData['PT'])
-        refEpoch = stationDataCsv.loc[indexTuple]['REF_EPOCH'][0]
+        refEpoch = stationxyz.loc[indexTuple]['REF_EPOCH'][0]
         yearsSinceEpoch = (epoch - refEpoch).days / 365.25
 
         pv = pivotTable.loc[indexTuple]['ESTIMATED_VALUE']
