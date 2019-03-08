@@ -8,7 +8,7 @@ def epochStringToDatetime(epochString):
     referenceEpoch = datetime(epochYear, 1, 1) + timedelta(days=epochData[1] - 1) + timedelta(seconds=epochData[2])
     return referenceEpoch
 
-def parseStationData(stationFile, epoch):
+def parseStationData(stationFile, stationEccFile, epoch):
     from org.orekit.utils import IERSConventions
     from org.orekit.frames import FramesFactory
     itrf = FramesFactory.getITRF(IERSConventions.IERS_2010, True)
@@ -52,7 +52,6 @@ def parseStationData(stationFile, epoch):
 
     # Doing a second run on the file to find the beginning of the accurate station data
     with open(stationFile) as f:
-        line = ''
         for num, line in enumerate(f, 1):
             if '+SOLUTION/ESTIMATE' in line:
                 break
@@ -69,6 +68,20 @@ def parseStationData(stationFile, epoch):
     stationDataCsv['REF_EPOCH'] = stationDataCsv['REF_EPOCH'].apply(lambda x: epochStringToDatetime(x))
     # Computing a pivot table to have columns [STAX, STAY, STAZ, VELX, VELY, VELZ] containing the position/velocity values
     pivotTable = stationDataCsv.pivot_table(index=['CODE', 'PT'], columns=['TYPE'], values=['ESTIMATED_VALUE'])
+
+    # Reading the eccentricities data
+    with open(stationEccFile) as f:
+        for num, line in enumerate(f, 1):
+            if '+SITE/ECCENTRICITY' in line:
+                break
+    lineNumberStart_ecc = num + 1  # skipping table header
+    eccDataFrame = pd.read_csv(stationEccFile, engine='python',
+                               names=['SITE', 'PT', 'SOLN', 'T', 'DATA_START', 'DATA_END', 'XYZ', 'X', 'Y', 'Z',
+                                      'CDP-SOD'],
+                               index_col=['SITE', 'PT'],
+                               sep='\s+|\t+|\s+\t+|\t+\s+', skiprows=lineNumberStart_ecc, skipfooter=2)
+    eccDataFrame['DATA_START'] = eccDataFrame['DATA_START'].apply(lambda x: epochStringToDatetime(x))
+    eccDataFrame['DATA_END'] = eccDataFrame['DATA_END'].apply(lambda x: epochStringToDatetime(x))
 
     # A loop is needed here to create the Orekit objects
     for stationId, staData in stationData.iterrows():
