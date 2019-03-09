@@ -1,3 +1,5 @@
+# Converts a string to a datetime object
+# Input format: yearsInCentury:daysInYear:secondsInDay
 def epochStringToDatetime(epochString):
     from datetime import datetime, timedelta
     epochData = [int(d) for d in epochString.split(':')]
@@ -79,31 +81,57 @@ def parseStationData(stationFile, stationEccFile, epoch):
     pivotTable = stationxyz.pivot_table(index=['CODE', 'PT'], 
                                         columns=['TYPE'], 
                                         values=['ESTIMATED_VALUE', 'STD_DEV'])
-    stationxyz.set_index(['CODE', 'PT'], inplace = True)            
+    stationxyz.set_index(['CODE', 'PT'], inplace = True)
+    
     # Reading the eccentricities data
+    stationEcc = pd.DataFrame(columns=['SITE', 'PT', 'SOLN', 'T', 'DATA_START', 
+                                   'DATA_END', 'XYZ', 'X', 'Y', 'Z'])
+
     with open(stationEccFile) as f:
-        for num, line in enumerate(f, 1):
-            if '+SITE/ECCENTRICITY' in line:
-                break
-    lineNumberStart_ecc = num + 1  # skipping table header
-    eccDataFrame = pd.read_csv(stationEccFile, engine='python',
-                               names=['SITE', 'PT', 'SOLN', 'T', 'DATA_START', 'DATA_END', 'XYZ', 'X', 'Y', 'Z',
-                                      'CDP-SOD'],
-                               index_col=['SITE', 'PT'],
-                               sep='\s+|\t+|\s+\t+|\t+\s+', skiprows=lineNumberStart_ecc, skipfooter=2)
-    eccDataFrame['DATA_START'] = eccDataFrame['DATA_START'].apply(lambda x: epochStringToDatetime(x))
-    eccDataFrame['DATA_END'] = eccDataFrame['DATA_END'].apply(lambda x: epochStringToDatetime(x))
+        line = ''
+        while not line.startswith('+SITE/ECCENTRICITY'):
+            line = f.readline()
+        line = f.readline() # skipping +SITE/ECCENTRICITY
+        line = f.readline() # skipping table header
+
+        while not line.startswith('-SITE/ECCENTRICITY'):
+            site = int(line[0:5])
+            pt = line[7:8]
+            soln = int(line[9:13])
+            t = line[14:15]
+            dataStartStr = line[16:28]
+            dataStart = epochStringToDatetime(dataStartStr)
+            dataEndStr = line[29:41]
+            dataEnd = epochStringToDatetime(dataEndStr)
+            xyz = line[42:45]
+            x = float(line[46:54])
+            y = float(line[55:63])
+            z = float(line[64:72])
+            stationId = line[80:88]
+
+            stationEcc.loc[stationId] = [site, pt, soln, t, dataStart,
+                                          dataEnd, xyz, x, y, z]
+
+            line = f.readline()
+
+    stationEcc.index.name = 'CDP-SOD'
 
     # A loop is needed here to create the Orekit objects
     for stationId, staData in stationData.iterrows():
         indexTuple = (staData['CODE'], staData['PT'])
-        refEpoch = stationxyz.loc[indexTuple]['REF_EPOCH'][0]
+        refEpoch = stationxyz.loc[indexTuple, 'REF_EPOCH'][0]
         yearsSinceEpoch = (epoch - refEpoch).days / 365.25
 
         pv = pivotTable.loc[indexTuple]['ESTIMATED_VALUE']
-        x = float(pv['STAX'] + pv['VELX'] * yearsSinceEpoch)
-        y = float(pv['STAY'] + pv['VELY'] * yearsSinceEpoch)
-        z = float(pv['STAZ'] + pv['VELZ'] * yearsSinceEpoch)
+        x = float(pv['STAX'] + # Station coordinates
+                  pv['VELX'] * yearsSinceEpoch + # Station displacements
+                  stationEcc.loc[stationId]['X']) # Station eccentricities
+        y = float(pv['STAY'] + 
+                  pv['VELY'] * yearsSinceEpoch +
+                  stationEcc.loc[stationId]['Y'])
+        z = float(pv['STAZ'] + 
+                  pv['VELZ'] * yearsSinceEpoch +
+                  stationEcc.loc[stationId]['Z'])
         station_xyz_m = Vector3D(x, y, z)
         geodeticPoint = wgs84ellipsoid.transform(station_xyz_m, itrf, datetime_to_absolutedate(epoch))
         lon_deg = rad2deg(geodeticPoint.getLongitude())
