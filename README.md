@@ -2,6 +2,8 @@
 
 This repository provides examples for orbit determination based on laser ranging data, in the form of Jupyter Notebooks.
 
+The open-source orbital dynamics library Orekit (https://www.orekit.org/) is used for all calculations, and in particular the Python wrapper developed by @petrushy: https://gitlab.orekit.org/orekit-labs/python-wrapper
+
 # Installation
 
 ## Prerequisites
