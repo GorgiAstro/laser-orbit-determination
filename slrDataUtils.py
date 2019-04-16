@@ -366,6 +366,50 @@ def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
 
     return slrDataFrame
 
+
+def write_cpf(cpf_df, cpf_filename, ephemeris_source, production_date, ephemeris_sequence, target_name, cospar_id,
+              sic, norad_id, ephemeris_start_date, ephemeris_end_date, step_time):
+    """
+    Writes satellite position data to a Consolidated prediction file.
+    Reference: https://ilrs.cddis.eosdis.nasa.gov/docs/2006/cpf_1.01.pdf
+    The function ignores leap seconds, i.e. it writes the UTC data directly and sets all leap seconds entries in the CPF file to zero
+
+    :param cpf_df: DataFrame containing the date and position data. It must contain the following columns:
+        - mjd_days: int, Modified Julian Days in UTC scale
+        - seconds_of_day: float, seconds of day in UTC scale
+        - x: float, satellite position in ITRF frame
+        - y: float, satellite position in ITRF frame
+        - z: float, satellite position in ITRF frame
+    :param cpf_filename: str, filename where the data will be written
+    :param ephemeris_source: str (e.g., "HON", "UTX"). Must be exactly 3 characters long
+    :param production_date: datetime object. Date at which the orbit determination was performed
+    :param ephemeris_sequence: int, incremented at each new orbit determination. Must be below 10000
+    :param target_name: str, satellite name
+    :param cospar_id: str, COSPAR ID
+    :param sic: str, SIC
+    :param norad_id: str, NORAD ID
+    :param ephemeris_start_date: datetime
+    :param ephemeris_end_date: datetime
+    :param step_time: int
+    """
+
+    assert (len(ephemeris_source) == 3), 'Ephemeris source must be a string with exactly 3 characters'
+    assert (ephemeris_sequence < 10000), 'Ephemeris sequence can have only 4 digits maximum'
+
+    with open(cpf_filename, 'w') as f:
+        f.write(
+            f'H1 CPF  1  {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:04} {target_name:10}           \n')
+        f.write(
+            f'H2 {cospar_id}  {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0\n')
+        f.write('H9\n')
+
+        for key, values in cpf_df.iterrows():
+            f.write(
+                f"10 0 {values['mjd_days']} {values['seconds_of_day']:13.6f}  0  {values['x']:16.3f} {values['y']:16.3f} {values['z']:16.3f}\n")
+
+        f.write('99')
+
+
 def orekitPV2dataframe(PV, currentDateTime):
     import pandas as pd
     pos = PV.getPosition()
