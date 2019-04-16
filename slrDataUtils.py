@@ -360,6 +360,7 @@ def orekitPV2dataframe(PV, currentDateTime):
     import pandas as pd
     pos = PV.getPosition()
     vel = PV.getVelocity()
-    data = {'x': pos.getX(), 'y': pos.getY(), 'z': pos.getZ(),
+    data = {'DateTimeUTC': currentDateTime,
+            'x': pos.getX(), 'y': pos.getY(), 'z': pos.getZ(),
             'vx': vel.getX(), 'vy': vel.getY(), 'vz': vel.getZ()}
     return pd.DataFrame(data, index=[currentDateTime])
