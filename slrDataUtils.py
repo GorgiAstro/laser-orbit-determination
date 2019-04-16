@@ -1,6 +1,12 @@
-# Converts a string to a datetime object
-# Input format: yearsInCentury:daysInYear:secondsInDay
+
+
 def epochStringToDatetime(epochString):
+    """
+    Converts a string to a datetime object
+    Input format: yearsInCentury:daysInYear:secondsInDay
+    :param epochString: str
+    :return:
+    """
     from datetime import datetime, timedelta
     epochData = [int(d) for d in epochString.split(':')]
     if epochData[0] > 50: # 20th century
@@ -9,6 +15,7 @@ def epochStringToDatetime(epochString):
         epochYear = epochData[0] + 2000
     referenceEpoch = datetime(epochYear, 1, 1) + timedelta(days=epochData[1] - 1) + timedelta(seconds=epochData[2])
     return referenceEpoch
+
 
 def parseStationData(stationFile, stationEccFile, epoch):
     from org.orekit.utils import IERSConventions
@@ -143,6 +150,7 @@ def parseStationData(stationFile, stationEccFile, epoch):
 
     return stationData
 
+
 def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
     import requests
     import json
@@ -179,6 +187,7 @@ def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
     datasetList.drop('id', axis=1, inplace=True)
 
     return datasetList
+
 
 def dlAndParseCpfData(username_edc, password_edc, url, datasetList, startDate, endDate):
     # The data is truncated within the given time frame
@@ -233,6 +242,7 @@ def dlAndParseCpfData(username_edc, password_edc, url, datasetList, startDate, e
             print(dl_response.text)
 
     return cpfDataFrame
+
 
 def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate, endDate):
     # dataType: 'NPT' or 'FRD'
