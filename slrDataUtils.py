@@ -289,7 +289,9 @@ def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate,
             print(search_response.status_code)
             print(search_response.text)
 
-    datasetList.drop('id', axis=1, inplace=True)
+    if not datasetList.empty:
+        datasetList.drop('id', axis=1, inplace=True)
+
     return datasetList
 
 
