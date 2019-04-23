@@ -8,6 +8,7 @@ dependencies:
   - jupyterlab
   - requests # Used for making requests to the laser ranging data API
   - numpy
+  - numpy-base
   - pandas
   - matplotlib
   - nodejs # For installing Jupyter lab extensions
