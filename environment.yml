@@ -1,5 +1,7 @@
 name: laserod
 channels:
+  - defaults
+  - plotly
   - conda-forge
 dependencies:
   - python
@@ -13,6 +15,8 @@ dependencies:
   - matplotlib
   - nodejs # For installing Jupyter lab extensions
   - plotly
+  - plotly-orca
+  - psutil
   - pip
   - pip:
     - spacetrack
