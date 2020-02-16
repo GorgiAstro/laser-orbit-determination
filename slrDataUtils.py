@@ -189,7 +189,7 @@ def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
     return datasetList
 
 
-def dlAndParseCpfData(username_edc, password_edc, url, datasetList, startDate, endDate):
+def dlAndParseCpfData(username_edc, password_edc, url, datasetIdList, startDate, endDate):
     # The data is truncated within the given time frame
     import requests
     import json
@@ -207,7 +207,7 @@ def dlAndParseCpfData(username_edc, password_edc, url, datasetList, startDate, e
     import pandas as pd
     cpfDataFrame = pd.DataFrame(columns=['x', 'y', 'z'])
 
-    for datasetId, dataset in datasetList.iterrows():
+    for datasetId in datasetIdList:
         dl_args['id'] = str(datasetId)
         dl_response = requests.post(url, data=dl_args)
 
