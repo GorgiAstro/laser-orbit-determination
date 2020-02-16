@@ -51,3 +51,11 @@ I recommend the following two extensions:
 * Enter conda environment: `source activate laserod` (or start a terminal directly in the environment using Anaconda Navigator)
 * Start Jupyter Lab: `jupyter lab`
 * Jupyter Lab should pop up in your browser at the URL http://localhost:8888
+
+# Updating data files
+## Orekit data
+
+## Laser ranging station coordinates
+The station coordinates files (position&velocity) are updated from time to time. Check out for files named with the format `SLRF2014_POS+VEL_2030.0_xxxxxx.snx` on ftp://cddis.nasa.gov/slr/products/resource/
+
+The newest eccentricities file is always renamed `ecc_xyz.snx` and is available at ftp://cddis.gsfc.nasa.gov/slr/slrocc/ecc_xyz.snx
