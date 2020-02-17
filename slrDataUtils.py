@@ -337,27 +337,27 @@ def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
                 currentLine = data[i]
                 i += 1
 
-            while (currentLine.startswith('11') or currentLine.startswith('10'))\
-                    and i < n:  # Reading until the end of normal point data
-                lineData = currentLine.split()
-                timeOfDay = float(lineData[1])
-                timeOfFlight = float(lineData[2])
-                timestampType = int(lineData[4])
+            while i < n:
+                if currentLine.startswith('11') or currentLine.startswith('10'):
+                    lineData = currentLine.split()
+                    timeOfDay = float(lineData[1])
+                    timeOfFlight = float(lineData[2])
+                    timestampType = int(lineData[4])
 
-                r = c * timeOfFlight / 2
+                    r = c * timeOfFlight / 2
 
-                if timestampType == 1:
-                    transmitTime = measurementDay + timedelta(seconds=(timeOfDay - timeOfFlight / 2))
-                else:
-                    transmitTime = measurementDay + timedelta(seconds=timeOfDay)
+                    if timestampType == 1:
+                        transmitTime = measurementDay + timedelta(seconds=(timeOfDay - timeOfFlight / 2))
+                    else:
+                        transmitTime = measurementDay + timedelta(seconds=timeOfDay)
 
-                bounceTime = transmitTime + timedelta(seconds=timeOfFlight / 2)
-                receiveTime = bounceTime + timedelta(seconds=timeOfFlight / 2)
+                    bounceTime = transmitTime + timedelta(seconds=timeOfFlight / 2)
+                    receiveTime = bounceTime + timedelta(seconds=timeOfFlight / 2)
 
-                #print('Transmit time: {}, receive time: {}'.format(transmitTime, receiveTime))
-                #print('Time of flight: {} milliseconds, satellite range: {} kilometers'.format(timeOfFlight*1000, r/1000))
-                #print('')
-                slrDataFrame.loc[receiveTime] = [dataset['station'], r]
+                    #print('Transmit time: {}, receive time: {}'.format(transmitTime, receiveTime))
+                    #print('Time of flight: {} milliseconds, satellite range: {} kilometers'.format(timeOfFlight*1000, r/1000))
+                    #print('')
+                    slrDataFrame.loc[receiveTime] = [dataset['station'], r]
 
                 currentLine = data[i]
                 i += 1
