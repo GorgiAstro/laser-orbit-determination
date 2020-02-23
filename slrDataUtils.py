@@ -18,6 +18,21 @@ def epochStringToDatetime(epochString):
 
 
 def parseStationData(stationFile, stationEccFile, epoch):
+    """
+    Parses the two files containing the coordinates of laser ranging ground stations
+    :param stationFile: str, path to the station coordinates file
+    :param stationEccFile: str, path to the station eccentricities file
+    :param epoch: datetime object. used to compute the station position based on the velocity data
+    :return: a pandas DataFrame containing:
+        - index: str, 8-digit id of the ground station
+        - columns:
+            - CODE: int, 4-digit station code (including possibly several receivers)
+            - PT: str, usually A
+            - Latitude: float, station latitude in degrees
+            - Longitude: float, station longitude in degrees
+            - Altitude: float, station altitude above WGS84 reference sea level in meters
+            - OrekitGroundStation: Orekit GroundStation object
+    """
     from org.orekit.utils import IERSConventions
     from org.orekit.frames import FramesFactory
     itrf = FramesFactory.getITRF(IERSConventions.IERS_2010, True)
@@ -25,10 +40,9 @@ def parseStationData(stationFile, stationEccFile, epoch):
     wgs84ellipsoid = ReferenceEllipsoid.getWgs84(itrf)
 
     from org.hipparchus.geometry.euclidean.threed import Vector3D
-    from org.orekit.bodies import GeodeticPoint
     from org.orekit.frames import TopocentricFrame
     from org.orekit.estimation.measurements import GroundStation
-    from numpy import deg2rad, rad2deg
+    from numpy import rad2deg
     from orekit.pyhelpers import datetime_to_absolutedate
 
     import pandas as pd
@@ -152,6 +166,18 @@ def parseStationData(stationFile, stationEccFile, epoch):
 
 
 def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
+    """
+    Queries a list of CPF predictions for a given satellite and a given date. Usually there is one or two predictions
+    every day, so this function will only look for predictions published at startDate.
+    :param username_edc: str, username for the EDC API
+    :param password_edc: str, password for the EDC API
+    :param url: str, URL for the EDC API
+    :param cosparId: str, COSPAR ID of the satellite
+    :param startDate: datetime object, date where CPF prediction was published
+    :return: pandas DataFrame object containing:
+        - index: int, CPF id
+        - columns: see section "Data query" for CPF data at https://edc.dgfi.tum.de/en/api/doc/
+    """
     import requests
     import json
     search_args = {}
@@ -166,7 +192,7 @@ def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
     import pandas as pd
     datasetList = pd.DataFrame()
 
-    search_args['start_data_date'] = '{:%Y-%m-%d}%'.format(startDate) # Data will start at midnight
+    search_args['start_data_date'] = '{:%Y-%m-%d}%'.format(startDate)  # Data will start at midnight
 
     search_response = requests.post(url, data=search_args)
 
@@ -190,7 +216,19 @@ def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
 
 
 def dlAndParseCpfData(username_edc, password_edc, url, datasetIdList, startDate, endDate):
-    # The data is truncated within the given time frame
+    """
+    Downloads and parses CPF prediction data. A CPF file usually contains one week of data. Using both startDate and
+    endDate parameters, it is possible to truncate this data.
+    :param username_edc: str, username for the EDC API
+    :param password_edc: str, password for the EDC API
+    :param url: str, URL for the EDC API
+    :param datasetIdList: list of dataset ids to download.
+    :param startDate: datetime object. Data prior to this date will be removed
+    :param endDate: datetime object. Data after this date will be removed
+    :return: pandas DataFrame containing:
+        - index: datetime object of the data point, in UTC locale
+        - columns 'x', 'y', and 'z': float, satellite position in ITRF frame in meters
+    """
     import requests
     import json
     from org.orekit.time import AbsoluteDate
@@ -245,6 +283,19 @@ def dlAndParseCpfData(username_edc, password_edc, url, datasetIdList, startDate,
 
 
 def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate, endDate):
+    """
+    Queries a list of SLR ground station pass data
+    :param username_edc: str, username for the EDC API
+    :param password_edc: str, password for the EDC API
+    :param url: str, URL for the EDC API
+    :param dataType: str, NPT for normal point data or FRD for full-rate data
+    :param cosparId: str, COSPAR ID of the satellite
+    :param startDate: datetime object, start date to look for data
+    :param endDate: datetime object, end date to look for data
+    :return: pandas DataFrame object, containing:
+        - index: int, unique ID for the ground station pass
+        - columns: see documentation for "Data query" in https://edc.dgfi.tum.de/en/api/doc/
+    """
     # dataType: 'NPT' or 'FRD'
     import requests
     import json
@@ -296,11 +347,31 @@ def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate,
 
 
 def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
+    """
+    Download the CRD files specified by the user from the EDC API, parses it and return a Dataframe containing range and
+    angles measurements
+
+    :param username_edc: str, username for the EDC API
+    :param password_edc: str, password for the EDC API
+    :param url: str, URL for the EDC API
+    :param dataType: str, NPT for normal point data or FRD for full-rate data
+    :param datasetList: pandas Dataframe, returned by the querySlrData function
+    :return: a pandas Dataframe containing:
+        - index: datetime, receive time of the measurement
+        - station-id: str, 8-digit id of the ground station
+        - range: float, range in meters between ground station and satellite at bounce time
+        - az: float, azimuth in radians of ground station at signal receive time. Often associated to range measurement,
+            may not be always available
+        - el: float, elevation in radians of ground station at signal receive time. Often associated to range measurement,
+            may not be always available
+        You should check that range, az and el are not NaN before using them
+    """
     import requests
     import json
+    import numpy as np
     from datetime import datetime
     from datetime import timedelta
-    c = 299792458 # m/s
+    c = 299792458  # m/s
 
     dl_args = {}
     dl_args['username'] = username_edc
@@ -309,7 +380,7 @@ def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
     dl_args['data_type'] = dataType
 
     import pandas as pd
-    slrDataFrame = pd.DataFrame(columns=['station-id', 'range'])
+    slrDataFrame = pd.DataFrame(columns=['station-id', 'range', 'az', 'el'])
 
     for datasetId, dataset in datasetList.iterrows():
         dl_args['id'] = str(datasetId)
@@ -333,12 +404,14 @@ def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
             d = int(lineData[4])
             measurementDay = datetime(y, m, d)
 
-            while (not (currentLine.startswith('11') or currentLine.startswith('10'))) and i < n:  # Reading lines until the start of normal point data
+            while (not (currentLine.startswith('11') or currentLine.startswith(
+                    '10'))) and i < n:  # Reading lines until the start of normal point data
                 currentLine = data[i]
                 i += 1
 
             while i < n:
-                if currentLine.startswith('11') or currentLine.startswith('10'):
+                if currentLine.startswith('11') or currentLine.startswith(
+                        '10'):  # Normal point or full-rate range record
                     lineData = currentLine.split()
                     timeOfDay = float(lineData[1])
                     timeOfFlight = float(lineData[2])
@@ -354,10 +427,30 @@ def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
                     bounceTime = transmitTime + timedelta(seconds=timeOfFlight / 2)
                     receiveTime = bounceTime + timedelta(seconds=timeOfFlight / 2)
 
-                    #print('Transmit time: {}, receive time: {}'.format(transmitTime, receiveTime))
-                    #print('Time of flight: {} milliseconds, satellite range: {} kilometers'.format(timeOfFlight*1000, r/1000))
-                    #print('')
-                    slrDataFrame.loc[receiveTime] = [dataset['station'], r]
+                    slrDataFrame.loc[receiveTime, ['station-id', 'range']] = [dataset['station'], r]
+
+                elif currentLine.startswith('30'):  # Pointing angles record
+                    lineData = currentLine.split()
+                    timeOfDay_azel = float(lineData[1])
+                    az_deg = float(lineData[2])
+                    el_deg = float(lineData[3])
+                    direction_flag = int(lineData[4])
+                    angle_origin = int(lineData[5])
+                    refraction_corrected = int(lineData[6])
+
+                    '''
+                    direction_flag is usually 0 and angle_origin 2, which means that
+                    the angles were commanded and were the same for transmit and receive.
+                    Therefore there is no way to correct for the satellite motion during the time of flight
+                    Orekit expects the reception time
+                    '''
+                    if timeOfDay_azel == timeOfDay:  # Angles measurement is associated with previous range measurement
+                        slrDataFrame.loc[receiveTime, ['az', 'el']] = [np.deg2rad(az_deg), np.deg2rad(el_deg)]
+                    else:
+                        azel_timestamp = measurementDay + timedelta(seconds=timeOfDay_azel)
+                        slrDataFrame.loc[receiveTime, ['station-id', 'az', 'el']] = [dataset['station'],
+                                                                                     np.deg2rad(az_deg),
+                                                                                     np.deg2rad(el_deg)]
 
                 currentLine = data[i]
                 i += 1
