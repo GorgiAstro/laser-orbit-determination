@@ -1,5 +1,5 @@
 This project contains some example data files useful that may be used
-as an initial setup for the [Orekit library](http://www.orekit.org/).
+as an initial setup for the [Orekit library](https://www.orekit.org/).
 
 In order to use these files, simply download the
 [latest archive](https://gitlab.orekit.org/orekit/orekit-data/-/archive/master/orekit-data-master.zip)
@@ -9,18 +9,20 @@ the start of your program:
 
 ```java
 File orekitData = new File("/path/to/the/folder/orekit-data");
-DataProvidersManager manager = DataProvidersManager.getInstance();
+DataProvidersManager manager = DataContext.getDefault().getDataProvidersManager();
 manager.addProvider(new DirectoryCrawler(orekitData));
 ```
 
 This zip file contains:
 
-  * JPL DE 430 ephemerides from 1990 to 2069,
-  * IERS Earth orientation parameters from 1973 to mid 2019
-    with predicted data to late 2019 (both IAU-1980 and IAU-2000),
+  * JPL DE 440 ephemerides from 1990 to 2149,
+  * IERS Earth orientation parameters from 1973 to mid 2021
+    with predicted data to early 2022 (both IAU-1980 and IAU-2000),
   * configuration data for ITRF versions used in regular IERS files,
-  * UTC-TAI history from 1972 to end of 2019,
-  * Marshall Solar Activity Future Estimation from 1999 to June 2019,
+  * UTC-TAI history from 1972 to end of 2021,
+  * Marshall Solar Activity Future Estimation from 1999 to June 2021,
+  * space weather data with observed data from 1957 to mi-2021
+    with predicted data up to 22 years in the future
   * the Eigen 6S gravity field
   * the FES 2004 ocean tides model.
 

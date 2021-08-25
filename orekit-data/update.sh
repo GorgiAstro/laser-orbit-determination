@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# Copyright 2002-2019 CS Systèmes d'Information
-# Licensed to CS Systèmes d'Information (CS) under one or more
+# Copyright 2002-2021 CS GROUP
+# Licensed to CS GROUP (CS) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
 # CS licenses this file to You under the Apache License, Version 2.0
@@ -17,15 +17,17 @@
 # limitations under the License.
 
 # this script updates the following files in the orekit-data directory
-#  tai-utc.dat
+#  UTC-TAI.history
 #  Earth-Orientation-Parameters/IAU-1980/finals.all
 #  Earth-Orientation-Parameters/IAU-2000/finals2000A.all
 #  MSAFE/mmm####f10_prd.txt (where mmm is a month abbreviation and #### a year)
+#  CSSI-Space-Weather-Data/SpaceWeather-All-v1.2.txt
 
 # base URLS
-usno_url=http://maia.usno.navy.mil/ser7
-iers_rapid_url=https://datacenter.iers.org/data/
+iers_bulc_url=https://hpiers.obspm.fr/eoppc/bul/bulc
+iers_rapid_url=https://datacenter.iers.org/data
 msafe_url=https://www.nasa.gov/sites/default/files/atoms/files
+cssi_url=ftp://ftp.agi.com/pub/DynamicEarthData
 
 # fetch a file from an URL
 fetch_URL()
@@ -88,7 +90,7 @@ first_missing_MSAFE()
 }
 
 # update (overwriting) leap seconds file
-fetch_URL $usno_url/tai-utc.dat
+fetch_URL $iers_bulc_url/UTC-TAI.history
 
 # update (overwriting) Earth Orientation Parameters
 (cd Earth-Orientation-Parameters/IAU-2000 && fetch_URL $iers_rapid_url/9/finals2000A.all)
@@ -112,3 +114,6 @@ while [ ! -z "$msafe_base" ] ; do
       msafe_base=""
     fi
 done
+
+# update (overwriting) CSSI space weather data
+(cd CSSI-Space-Weather-Data && fetch_URL $cssi_url/SpaceWeather-All-v1.2.txt)
