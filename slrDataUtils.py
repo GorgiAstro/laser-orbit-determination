@@ -1,324 +1,156 @@
+import requests
+import json
+from datetime import datetime
+from datetime import timedelta
+import pandas as pd
+import os
 
+from org.orekit.files.ilrs import CRDParser
+from org.orekit.data import DataSource
+from orekit.pyhelpers import absolutedate_to_datetime
+from org.orekit.time import AbsoluteDate
+from org.orekit.time import TimeScalesFactory
 
-def epochStringToDatetime(epochString):
-    """
-    Converts a string to a datetime object
-    Input format: yearsInCentury:daysInYear:secondsInDay
-    :param epochString: str
-    :return:
-    """
-    from datetime import datetime, timedelta
-    epochData = [int(d) for d in epochString.split(':')]
-    if epochData[0] > 50: # 20th century
-        epochYear = epochData[0] + 1900
-    else:
-        epochYear = epochData[0] + 2000
-    referenceEpoch = datetime(epochYear, 1, 1) + timedelta(days=epochData[1] - 1) + timedelta(seconds=epochData[2])
-    return referenceEpoch
-
-
-def parseStationData(stationFile, stationEccFile, epoch):
-    """
-    Parses the two files containing the coordinates of laser ranging ground stations
-    :param stationFile: str, path to the station coordinates file
-    :param stationEccFile: str, path to the station eccentricities file
-    :param epoch: datetime object. used to compute the station position based on the velocity data
-    :return: a pandas DataFrame containing:
-        - index: str, 8-digit id of the ground station
-        - columns:
-            - CODE: int, 4-digit station code (including possibly several receivers)
-            - PT: str, usually A
-            - Latitude: float, station latitude in degrees
-            - Longitude: float, station longitude in degrees
-            - Altitude: float, station altitude above WGS84 reference sea level in meters
-            - OrekitGroundStation: Orekit GroundStation object
-    """
-    from org.orekit.utils import IERSConventions
-    from org.orekit.frames import FramesFactory
-    itrf = FramesFactory.getITRF(IERSConventions.IERS_2010, True)
-    from org.orekit.models.earth import ReferenceEllipsoid
-    wgs84ellipsoid = ReferenceEllipsoid.getWgs84(itrf)
-
-    from org.hipparchus.geometry.euclidean.threed import Vector3D
-    from org.orekit.frames import TopocentricFrame
-    from org.orekit.estimation.measurements import GroundStation
-    from numpy import rad2deg
-    from orekit.pyhelpers import datetime_to_absolutedate
-
-    import pandas as pd
-    stationData = pd.DataFrame(columns=['CODE', 'PT', 'Latitude', 'Longitude', 'Altitude', 'OrekitGroundStation'])
-    stationxyz = pd.DataFrame(columns=['CODE', 'PT', 'TYPE', 'SOLN', 'REF_EPOCH',
-                                   'UNIT', 'S', 'ESTIMATED_VALUE', 'STD_DEV'])
-
-    # First run on the file to initialize the ground stations using the approximate lat/lon/alt data
-    with open(stationFile) as f:
-        line = ''
-        while not line.startswith('+SITE/ID'):
-            line = f.readline()
-        line = f.readline()  # Skipping +SITE/ID
-        line = f.readline()  # Skipping column header
-
-        while not line.startswith('-SITE/ID'):
-            stationCode = int(line[1:5])
-            pt = line[7]
-            l = line[44:]
-            #lon_deg = float(l[0:3]) + float(l[3:6]) / 60.0 + float(l[6:11]) / 60.0 / 60.0
-            #lat_deg = float(l[12:15]) + float(l[15:18]) / 60.0 + float(l[18:23]) / 60.0 / 60.0
-            #alt_m = float(l[24:31])
-            station_id = l[36:44]
-
-            #geodeticPoint = GeodeticPoint(float(deg2rad(lat_deg)), float(deg2rad(lon_deg)), alt_m)
-            #topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, str(station_id))
-            #groundStation = GroundStation(topocentricFrame)
-
-            #stationData.loc[station_id] = [stationCode, pt, lat_deg, lon_deg, alt_m, groundStation]
-            stationData.loc[station_id, ['CODE', 'PT']] = [stationCode, pt] # Only filling the station code and id
-            line = f.readline()        
-
-        # Parsing accurate ground station position from XYZ
-        while not line.startswith('+SOLUTION/ESTIMATE'):
-            line = f.readline()        
-
-        line = f.readline()  # Skipping +SOLUTION/ESTIMATE
-        line = f.readline()  # Skipping column header
-
-        while not line.startswith('-SOLUTION/ESTIMATE'):
-            index = int(line[1:6])
-            lineType = line[7:11]
-            code = int(line[14:18])
-            pt = line[20:21]
-            soln = int(line[22:26])
-            refEpochStr = line[27:39]       
-            refEpoch = epochStringToDatetime(refEpochStr)
-            unit = line[40:44]
-            s = int(line[45:46])
-            estimatedValue = float(line[47:68])
-            stdDev = float(line[69:80]) 
-
-            stationxyz.loc[index] = [code, pt, lineType, soln, refEpoch, 
-                                             unit, s, estimatedValue, stdDev]
-            line = f.readline() 
-
-    pivotTable = stationxyz.pivot_table(index=['CODE', 'PT'], 
-                                        columns=['TYPE'], 
-                                        values=['ESTIMATED_VALUE', 'STD_DEV'])
-    stationxyz.set_index(['CODE', 'PT'], inplace = True)
-    
-    # Reading the eccentricities data
-    stationEcc = pd.DataFrame(columns=['SITE', 'PT', 'SOLN', 'T', 'DATA_START', 
-                                   'DATA_END', 'XYZ', 'X', 'Y', 'Z'])
-
-    with open(stationEccFile) as f:
-        line = ''
-        while not line.startswith('+SITE/ECCENTRICITY'):
-            line = f.readline()
-        line = f.readline() # skipping +SITE/ECCENTRICITY
-        line = f.readline() # skipping table header
-
-        while not line.startswith('-SITE/ECCENTRICITY'):
-            site = int(line[0:5])
-            pt = line[7:8]
-            soln = int(line[9:13])
-            t = line[14:15]
-            dataStartStr = line[16:28]
-            dataStart = epochStringToDatetime(dataStartStr)
-            dataEndStr = line[29:41]
-            dataEnd = epochStringToDatetime(dataEndStr)
-            xyz = line[42:45]
-            x = float(line[46:54])
-            y = float(line[55:63])
-            z = float(line[64:72])
-            stationId = line[80:88]
-
-            stationEcc.loc[stationId] = [site, pt, soln, t, dataStart,
-                                          dataEnd, xyz, x, y, z]
-
-            line = f.readline()
-
-    stationEcc.index.name = 'CDP-SOD'
-
-    # A loop is needed here to create the Orekit objects
-    for stationId, staData in stationData.iterrows():
-        indexTuple = (staData['CODE'], staData['PT'])
-        refEpoch = stationxyz.loc[indexTuple, 'REF_EPOCH'][0]
-        yearsSinceEpoch = (epoch - refEpoch).days / 365.25
-
-        pv = pivotTable.loc[indexTuple]['ESTIMATED_VALUE']
-        x = float(pv['STAX'] + # Station coordinates
-                  pv['VELX'] * yearsSinceEpoch + # Station displacements
-                  stationEcc.loc[stationId]['X']) # Station eccentricities
-        y = float(pv['STAY'] + 
-                  pv['VELY'] * yearsSinceEpoch +
-                  stationEcc.loc[stationId]['Y'])
-        z = float(pv['STAZ'] + 
-                  pv['VELZ'] * yearsSinceEpoch +
-                  stationEcc.loc[stationId]['Z'])
-        station_xyz_m = Vector3D(x, y, z)
-        geodeticPoint = wgs84ellipsoid.transform(station_xyz_m, itrf, datetime_to_absolutedate(epoch))
-        lon_deg = rad2deg(geodeticPoint.getLongitude())
-        lat_deg = rad2deg(geodeticPoint.getLatitude())
-        alt_m = geodeticPoint.getAltitude()
-        topocentricFrame = TopocentricFrame(wgs84ellipsoid, geodeticPoint, str(indexTuple[0]))
-        groundStation = GroundStation(topocentricFrame)
-        stationData.loc[stationId] = [staData['CODE'], staData['PT'], lat_deg, lon_deg, alt_m, groundStation]
-
-    return stationData
-
-
-def queryCpfData(username_edc, password_edc, url, cosparId, startDate):
-    """
-    Queries a list of CPF predictions for a given satellite and a given date. Usually there is one or two predictions
-    every day, so this function will only look for predictions published at startDate.
-    :param username_edc: str, username for the EDC API
-    :param password_edc: str, password for the EDC API
-    :param url: str, URL for the EDC API
-    :param cosparId: str, COSPAR ID of the satellite
-    :param startDate: datetime object, date where CPF prediction was published
-    :return: pandas DataFrame object containing:
-        - index: int, CPF id
-        - columns: see section "Data query" for CPF data at https://edc.dgfi.tum.de/en/api/doc/
-    """
-    import requests
-    import json
-    search_args = {}
-    search_args['username'] = username_edc
-    search_args['password'] = password_edc
-    search_args['action'] = 'data-query'
-    search_args['data_type'] = 'CPF'
-    search_args['satellite'] = cosparId
-
-    from datetime import datetime
-
-    import pandas as pd
-    datasetList = pd.DataFrame()
-
-    search_args['start_data_date'] = '{:%Y-%m-%d}%'.format(startDate)  # Data will start at midnight
-
-    search_response = requests.post(url, data=search_args)
-
-    if search_response.status_code == 200:
-        search_data = json.loads(search_response.text)
-
-        for observation in search_data:
-            startDataDate = datetime.strptime(observation['start_data_date'], '%Y-%m-%d %H:%M:%S')
-            endDataDate = datetime.strptime(observation['end_data_date'], '%Y-%m-%d %H:%M:%S')
-
-            leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
-            datasetList = datasetList.append(leDataSet)
-
-    else:
-        print(search_response.status_code)
-        print(search_response.text)
-
-    datasetList.drop('id', axis=1, inplace=True)
-
-    return datasetList
-
-
-def dlAndParseCpfData(username_edc, password_edc, url, datasetIdList, startDate, endDate):
-    """
-    Downloads and parses CPF prediction data. A CPF file usually contains one week of data. Using both startDate and
-    endDate parameters, it is possible to truncate this data.
-    :param username_edc: str, username for the EDC API
-    :param password_edc: str, password for the EDC API
-    :param url: str, URL for the EDC API
-    :param datasetIdList: list of dataset ids to download.
-    :param startDate: datetime object. Data prior to this date will be removed
-    :param endDate: datetime object. Data after this date will be removed
-    :return: pandas DataFrame containing:
-        - index: datetime object of the data point, in UTC locale
-        - columns 'x', 'y', and 'z': float, satellite position in ITRF frame in meters
-    """
-    import requests
-    import json
-    from org.orekit.time import AbsoluteDate
-    from org.orekit.time import TimeScalesFactory
-    from orekit.pyhelpers import absolutedate_to_datetime
+class SlrDlManager:
+    c = 299792458  # m/s
     utc = TimeScalesFactory.getUTC()
 
-    dl_args = {}
-    dl_args['username'] = username_edc
-    dl_args['password'] = password_edc
-    dl_args['action'] = 'data-download'
-    dl_args['data_type'] = 'CPF'
+    def __init__(self, username_edc: str, password_edc: str, url: str = 'https://edc.dgfi.tum.de/api/v1/') -> None:
+        self.username_edc = username_edc
+        self.password_edc = password_edc
+        self.url = url
 
-    import pandas as pd
-    cpfDataFrame = pd.DataFrame(columns=['x', 'y', 'z'])
+    def queryCpfData(self, cosparId, startDate):
+        """
+        Queries a list of CPF predictions for a given satellite and a given date. Usually there is one or two predictions
+        every day, so this function will only look for predictions published at startDate.
+        :param cosparId: str, COSPAR ID of the satellite
+        :param startDate: datetime object, date where CPF prediction was published
+        :return: pandas DataFrame object containing:
+            - index: int, CPF id
+            - columns: see section "Data query" for CPF data at https://edc.dgfi.tum.de/en/api/doc/
+        """
+        search_args = {}
+        search_args['username'] = self.username_edc
+        search_args['password'] = self.password_edc
+        search_args['action'] = 'data-query'
+        search_args['data_type'] = 'CPF'
+        search_args['satellite'] = cosparId
 
-    for datasetId in datasetIdList:
-        dl_args['id'] = str(datasetId)
-        dl_response = requests.post(url, data=dl_args)
+        datasetList = pd.DataFrame()
 
-        if dl_response.status_code == 200:
-            """ convert json string in python list """
-            data = json.loads(dl_response.text)
+        search_data = []
+        while len(search_data) == 0:
+            # Looping in case no CPF prediction is available on the desired day
 
-            currentLine = ''
-            i = 0
-            n = len(data)
+            search_args['start_data_date'] = '{:%Y-%m-%d}%'.format(startDate)  # Data will start at midnight
+            search_response = requests.post(self.url, data=search_args)
 
-            while (not currentLine.startswith('10')) and i < n:  # Reading lines until the H4 header
-                currentLine = data[i]
-                i += 1
+            if search_response.status_code == 200:
+                search_data = json.loads(search_response.text)
 
-            while currentLine.startswith('10') and i < n:
-                lineData = currentLine.split()
-                mjd_day = int(lineData[2])
-                secondOfDay = float(lineData[3])
-                position_ecef = [float(lineData[5]), float(lineData[6]), float(lineData[7])]
-                absolutedate = AbsoluteDate.createMJDDate(mjd_day, secondOfDay, utc)
-                currentdatetime = absolutedate_to_datetime(absolutedate)
+                for observation in search_data:
+                    startDataDate = datetime.strptime(observation['start_data_date'], '%Y-%m-%d %H:%M:%S')
+                    endDataDate = datetime.strptime(observation['end_data_date'], '%Y-%m-%d %H:%M:%S')
 
-                if (currentdatetime >= startDate) and (currentdatetime <= endDate):
-                    cpfDataFrame.loc[currentdatetime] = position_ecef
+                    leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
+                    datasetList = pd.concat([datasetList, leDataSet])
 
-                currentLine = data[i]
-                i += 1
+            else:
+                print(search_response.status_code)
+                print(search_response.text)
 
-        else:
-            print(dl_response.status_code)
-            print(dl_response.text)
+            startDate = startDate - timedelta(days=1)
 
-    return cpfDataFrame
+        datasetList.drop('id', axis=1, inplace=True)
 
+        return datasetList
 
-def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate, endDate):
-    """
-    Queries a list of SLR ground station pass data
-    :param username_edc: str, username for the EDC API
-    :param password_edc: str, password for the EDC API
-    :param url: str, URL for the EDC API
-    :param dataType: str, NPT for normal point data or FRD for full-rate data
-    :param cosparId: str, COSPAR ID of the satellite
-    :param startDate: datetime object, start date to look for data
-    :param endDate: datetime object, end date to look for data
-    :return: pandas DataFrame object, containing:
-        - index: int, unique ID for the ground station pass
-        - columns: see documentation for "Data query" in https://edc.dgfi.tum.de/en/api/doc/
-    """
-    # dataType: 'NPT' or 'FRD'
-    import requests
-    import json
-    search_args = {}
-    search_args['username'] = username_edc
-    search_args['password'] = password_edc
-    search_args['action'] = 'data-query'
-    search_args['data_type'] = dataType
-    search_args['satellite'] = cosparId
+    def dlAndParseCpfData(self, datasetIdList, startDate, endDate):
+        """
+        NOTE: THIS PARSES THE CPF MANUALLY. INSTEAD, OREKIT SHOULD BE USED FOR THAT.
+        Downloads and parses CPF prediction data. A CPF file usually contains one week of data. Using both startDate and
+        endDate parameters, it is possible to truncate this data.
+        :param datasetIdList: list of dataset ids to download.
+        :param startDate: datetime object. Data prior to this date will be removed
+        :param endDate: datetime object. Data after this date will be removed
+        :return: pandas DataFrame containing:
+            - index: datetime object of the data point, in UTC locale
+            - columns 'x', 'y', and 'z': float, satellite position in ITRF frame in meters
+        """
+        dl_args = {}
+        dl_args['username'] = self.username_edc
+        dl_args['password'] = self.password_edc
+        dl_args['action'] = 'data-download'
+        dl_args['data_type'] = 'CPF'
 
-    from datetime import datetime
-    from datetime import timedelta
+        cpfDataFrame = pd.DataFrame(columns=['x', 'y', 'z'])
 
-    import pandas as pd
-    datasetList = pd.DataFrame()
+        for datasetId in datasetIdList:
+            dl_args['id'] = str(datasetId)
+            dl_response = requests.post(self.url, data=dl_args)
 
-    numberOfDays = (endDate - startDate).days
+            if dl_response.status_code == 200:
+                """ convert json string in python list """
+                data = json.loads(dl_response.text)
 
-    for i in range(int(numberOfDays) + 1):  # Making a request for each day
-        endDate_current = startDate + timedelta(days=i)
-        search_args['end_data_date'] = '{:%Y-%m-%d}%'.format(endDate_current)
+                currentLine = ''
+                i = 0
+                n = len(data)
 
-        search_response = requests.post(url, data=search_args)
+                while (not currentLine.startswith('10')) and i < n:  # Reading lines until the H4 header
+                    currentLine = data[i]
+                    i += 1
+
+                while currentLine.startswith('10') and i < n:
+                    lineData = currentLine.split()
+                    mjd_day = int(lineData[2])
+                    secondOfDay = float(lineData[3])
+                    position_ecef = [float(lineData[5]), float(lineData[6]), float(lineData[7])]
+                    absolutedate = AbsoluteDate.createMJDDate(mjd_day, secondOfDay, self.utc)
+                    currentdatetime = absolutedate_to_datetime(absolutedate)
+
+                    if (currentdatetime >= startDate) and (currentdatetime <= endDate):
+                        cpfDataFrame.loc[currentdatetime] = position_ecef
+
+                    currentLine = data[i]
+                    i += 1
+
+            else:
+                print(dl_response.status_code)
+                print(dl_response.text)
+
+        return cpfDataFrame
+
+    def querySlrData(self, dataType, cosparId, startDate, endDate, station=None):
+        """
+        Queries a list of SLR ground station pass data
+        :param dataType: str, NPT for normal point data or FRD for full-rate data
+        :param cosparId: str, COSPAR ID of the satellite
+        :param startDate: datetime object, start date to look for data
+        :param endDate: datetime object, end date to look for data
+        :param station: str, optional, for instance '78403501'
+        :return: pandas DataFrame object, containing:
+            - index: int, unique ID for the ground station pass
+            - columns: see documentation for "Data query" in https://edc.dgfi.tum.de/en/api/doc/
+        """
+        # dataType: 'NPT' or 'FRD'
+        search_args = {}
+        search_args['username'] = self.username_edc
+        search_args['password'] = self.password_edc
+        search_args['action'] = 'data-query'
+        search_args['data_type'] = dataType
+        search_args['satellite'] = cosparId
+
+        if station is not None:
+            search_args['station'] = station
+
+        datasetList = pd.DataFrame()
+
+        search_args['start_data_date'] = '{:%Y}%'.format(startDate - timedelta(days=1))
+        search_args['end_data_date'] = '{:%Y}%'.format(endDate + timedelta(days=1))
+
+        search_response = requests.post(self.url, data=search_args)
 
         if search_response.status_code == 200:
             search_data = json.loads(search_response.text)
@@ -326,190 +158,154 @@ def querySlrData(username_edc, password_edc, url, dataType, cosparId, startDate,
             for observation in search_data:
                 startDataDate = datetime.strptime(observation['start_data_date'], '%Y-%m-%d %H:%M:%S')
                 endDataDate = datetime.strptime(observation['end_data_date'], '%Y-%m-%d %H:%M:%S')
+                #print('Observation Id: {}  -  Station: {}  -  Date: {}'.format(observation['id'],
+                #                                                               observation['station'],
+                #                                                               observation['end_data_date']))
 
                 if (startDataDate >= startDate) and (
                         endDataDate <= endDate):  # Only taking the values within the date range
 
                     leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
-                    datasetList = datasetList.append(leDataSet)
-                    # print('Observation Id: {}  -  Station: {}  -  Date: {}'.format(observation['id'],
-                    #                                                               observation['station'],
-                    #                                                               observation['end_data_date']))
+                    datasetList = pd.concat([datasetList, leDataSet], ignore_index=False)
 
         else:
             print(search_response.status_code)
             print(search_response.text)
 
-    if not datasetList.empty:
-        datasetList.drop('id', axis=1, inplace=True)
+        if not datasetList.empty:
+            datasetList.drop('id', axis=1, inplace=True)
 
-    return datasetList
+        return datasetList
 
 
-def dlAndParseSlrData(username_edc, password_edc, url, dataType, datasetList):
-    """
-    Download the CRD files specified by the user from the EDC API, parses it and return a Dataframe containing range and
-    angles measurements
+    def dlAndParseSlrData(self, dataType, datasetList, out_folder):
+        """
+        Download the CRD files specified by the user from the EDC API, parses it and return a Dataframe containing range and
+        angles measurements
 
-    :param username_edc: str, username for the EDC API
-    :param password_edc: str, password for the EDC API
-    :param url: str, URL for the EDC API
-    :param dataType: str, NPT for normal point data or FRD for full-rate data
-    :param datasetList: pandas Dataframe, returned by the querySlrData function
-    :return: a pandas Dataframe containing:
-        - index: datetime, receive time of the measurement
-        - station-id: str, 8-digit id of the ground station
-        - range: float, range in meters between ground station and satellite at bounce time
-        - az: float, azimuth in radians of ground station at signal receive time. Often associated to range measurement,
-            may not be always available
-        - el: float, elevation in radians of ground station at signal receive time. Often associated to range measurement,
-            may not be always available
-        You should check that range, az and el are not NaN before using them
-    """
-    import requests
-    import json
-    import numpy as np
-    from datetime import datetime
-    from datetime import timedelta
-    c = 299792458  # m/s
+        :param dataType: str, NPT for normal point data or FRD for full-rate data
+        :param datasetList: pandas Dataframe, returned by the querySlrData function
+        :param out_folder: str, folder where to save the dataset
+        :return: a pandas Dataframe containing:
+            - index: datetime, receive time of the measurement
+            - station-id: str, 8-digit id of the ground station
+            - range: float, range in meters between ground station and satellite at bounce time
+            - wavelength_microm: float, wavelength in micrometers. To be used for ionospheric delay model
+            - pressure_mbar: float, pressure in millibars. To be used for ionospheric delay model
+            - temperature_K: float, temperature in Kelvin. To be used for ionospheric delay model
+            - humidity: float, humidity [0.0-1.0]. To be used for ionospheric delay model
+        """
+        if not os.path.exists(out_folder):
+            os.makedirs(out_folder)
 
-    dl_args = {}
-    dl_args['username'] = username_edc
-    dl_args['password'] = password_edc
-    dl_args['action'] = 'data-download'
-    dl_args['data_type'] = dataType
+        dl_args = {}
+        dl_args['username'] = self.username_edc
+        dl_args['password'] = self.password_edc
+        dl_args['action'] = 'data-download'
+        dl_args['data_type'] = dataType
 
-    import pandas as pd
-    slrDataFrame = pd.DataFrame(columns=['station-id', 'range', 'az', 'el'])
+        crd_parser = CRDParser()
+        slr_dict = {}
+        for datasetId, dataset in datasetList.iterrows():
+            filename = os.path.join(out_folder, f'{datasetId}.{dataType.lower()}')
+            if not os.path.isfile(filename):
+                dl_args['id'] = str(datasetId)
+                dl_response = requests.post(self.url, data=dl_args)
 
-    for datasetId, dataset in datasetList.iterrows():
-        dl_args['id'] = str(datasetId)
-        dl_response = requests.post(url, data=dl_args)
+                if dl_response.status_code != 200:
+                    return
 
-        if dl_response.status_code == 200:
-            """ convert json string in python list """
-            data = json.loads(dl_response.text)
+                dl_data = dl_response.json()
 
-            currentLine = ''
-            i = 0
-            n = len(data)
+                with open(filename, 'w') as f:
+                    f.writelines([l + '\n' for l in dl_data])
 
-            while (not currentLine.lower().startswith('h4')) and i < n:  # Reading lines until the H4 header
-                currentLine = data[i]
-                i += 1
 
-            lineData = currentLine.split()  # Reading day in H4 header
-            y = int(lineData[2])
-            m = int(lineData[3])
-            d = int(lineData[4])
-            measurementDay = datetime(y, m, d)
+            crd = crd_parser.parse(DataSource(filename))
 
-            while (not (currentLine.startswith('11') or currentLine.startswith(
-                    '10'))) and i < n:  # Reading lines until the start of normal point data
-                currentLine = data[i]
-                i += 1
+            for data_block in crd.getDataBlocks():
+                range_data = data_block.getRangeData()
+                crd_header = data_block.getHeader()
+                meteo_data = data_block.getMeteoData()
+                conf_record = data_block.getConfigurationRecords()
+                sys_record = conf_record.getSystemRecord()
 
-            while i < n:
-                if currentLine.startswith('11') or currentLine.startswith(
-                        '10'):  # Normal point or full-rate range record
-                    lineData = currentLine.split()
-                    timeOfDay = float(lineData[1])
-                    timeOfFlight = float(lineData[2])
-                    timestampType = int(lineData[4])
+                for range_meas in range_data:
+                    timeOfFlight = range_meas.getTimeOfFlight()
+                    meas_time = range_meas.getDate()
 
-                    r = c * timeOfFlight / 2
-
-                    if timestampType == 1:
-                        transmitTime = measurementDay + timedelta(seconds=(timeOfDay - timeOfFlight / 2))
+                    if range_meas.getEpochEvent() == 1:  # meas_time = bounce
+                        receiveTime = meas_time.shiftedBy(timeOfFlight / 2)
+                    elif range_meas.getEpochEvent() == 2:  # meas_time = ground transmit
+                        receiveTime = meas_time.shiftedBy(timeOfFlight)
                     else:
-                        transmitTime = measurementDay + timedelta(seconds=timeOfDay)
+                        print(f'Warning, unusual epoch indicator {range_meas.getEpochEvent()}')
 
-                    bounceTime = transmitTime + timedelta(seconds=timeOfFlight / 2)
-                    receiveTime = bounceTime + timedelta(seconds=timeOfFlight / 2)
+                    r = self.c * timeOfFlight / 2
 
-                    slrDataFrame.loc[receiveTime, ['station-id', 'range']] = [dataset['station'], r]
+                    meteo_meas = meteo_data.getMeteo(meas_time)
 
-                elif currentLine.startswith('30'):  # Pointing angles record
-                    lineData = currentLine.split()
-                    timeOfDay_azel = float(lineData[1])
-                    az_deg = float(lineData[2])
-                    el_deg = float(lineData[3])
-                    direction_flag = int(lineData[4])
-                    angle_origin = int(lineData[5])
-                    refraction_corrected = int(lineData[6])
+                    slr_dict[meas_time] = [str(crd_header.getSystemIdentifier()),
+                                        r, 1e6 * sys_record.getWavelength(),
+                                        1e3 * meteo_meas.getPressure(), meteo_meas.getTemperature(), 1e-2*meteo_meas.getHumidity()]
 
-                    '''
-                    direction_flag is usually 0 and angle_origin 2, which means that
-                    the angles were commanded and were the same for transmit and receive.
-                    Therefore there is no way to correct for the satellite motion during the time of flight
-                    Orekit expects the reception time
-                    '''
-                    if timeOfDay_azel == timeOfDay:  # Angles measurement is associated with previous range measurement
-                        slrDataFrame.loc[receiveTime, ['az', 'el']] = [np.deg2rad(az_deg), np.deg2rad(el_deg)]
-                    else:
-                        azel_timestamp = measurementDay + timedelta(seconds=timeOfDay_azel)
-                        slrDataFrame.loc[receiveTime, ['station-id', 'az', 'el']] = [dataset['station'],
-                                                                                     np.deg2rad(az_deg),
-                                                                                     np.deg2rad(el_deg)]
+        slrDataFrame = pd.DataFrame.from_dict(slr_dict,orient='index',columns=['station-id', 'range', 'wavelength_microm', 'pressure_mbar', 'temperature_K', 'humidity'])
 
-                currentLine = data[i]
-                i += 1
-
-        else:
-            print(dl_response.status_code)
-            print(dl_response.text)
-
-    return slrDataFrame
+        return slrDataFrame
 
 
-def write_cpf(cpf_df, cpf_filename, ephemeris_source, production_date, ephemeris_sequence, target_name, cospar_id,
-              sic, norad_id, ephemeris_start_date, ephemeris_end_date, step_time):
-    """
-    Writes satellite position data to a Consolidated prediction file.
-    Reference: https://ilrs.cddis.eosdis.nasa.gov/docs/2006/cpf_1.01.pdf
-    The function ignores leap seconds, i.e. it writes the UTC data directly and sets all leap seconds entries in the CPF file to zero
+    def write_cpf(self, cpf_df, cpf_filename, ephemeris_source, production_date, ephemeris_sequence, target_name, cospar_id,
+                sic, norad_id, ephemeris_start_date, ephemeris_end_date, step_time, cpf_version=1, sub_daily_eph_seq=0):
+        """
+        DEPRECATED, THIS FUNCTION WRITES CPF DATA MANUALLY; INSTEAD, OREKIT SHOULD BE USED FOR THAT
+        Writes satellite position data to a Consolidated prediction file.
+        Reference: https://ilrs.cddis.eosdis.nasa.gov/docs/2006/cpf_1.01.pdf
+        The function ignores leap seconds, i.e. it writes the UTC data directly and sets all leap seconds entries in the CPF file to zero
 
-    :param cpf_df: DataFrame containing the date and position data. It must contain the following columns:
-        - mjd_days: int, Modified Julian Days in UTC scale
-        - seconds_of_day: float, seconds of day in UTC scale
-        - x: float, satellite position in ITRF frame
-        - y: float, satellite position in ITRF frame
-        - z: float, satellite position in ITRF frame
-    :param cpf_filename: str, filename where the data will be written
-    :param ephemeris_source: str (e.g., "HON", "UTX"). Must be exactly 3 characters long
-    :param production_date: datetime object. Date at which the orbit determination was performed
-    :param ephemeris_sequence: int, incremented at each new orbit determination. Must be below 10000
-    :param target_name: str, satellite name
-    :param cospar_id: str, COSPAR ID
-    :param sic: str, SIC
-    :param norad_id: str, NORAD ID
-    :param ephemeris_start_date: datetime
-    :param ephemeris_end_date: datetime
-    :param step_time: int
-    """
+        :param cpf_df: DataFrame containing the date and position data. It must contain the following columns:
+            - mjd_days: int, Modified Julian Days in UTC scale
+            - seconds_of_day: float, seconds of day in UTC scale
+            - x: float, satellite position in ITRF frame
+            - y: float, satellite position in ITRF frame
+            - z: float, satellite position in ITRF frame
+        :param cpf_filename: str, filename where the data will be written
+        :param ephemeris_source: str (e.g., "HON", "UTX"). Must be exactly 3 characters long
+        :param production_date: datetime object. Date at which the orbit determination was performed
+        :param ephemeris_sequence: int, incremented at each new orbit determination. Must be below 10000
+        :param target_name: str, satellite name
+        :param cospar_id: str, COSPAR ID
+        :param sic: str, SIC
+        :param norad_id: str, NORAD ID
+        :param ephemeris_start_date: datetime
+        :param ephemeris_end_date: datetime
+        :param step_time: int
+        :param cpf_version: int, 1 or 2. default is 1
+        :param sub_daily_eph_seq: int, optional, only for CPF version 2. Must be below 99
+        """
 
-    assert (len(ephemeris_source) == 3), 'Ephemeris source must be a string with exactly 3 characters'
-    assert (ephemeris_sequence < 10000), 'Ephemeris sequence can have only 4 digits maximum'
+        assert(cpf_version in [1, 2])
+        assert (len(ephemeris_source) == 3), 'Ephemeris source must be a string with exactly 3 characters'
+        if (cpf_version == 1):
+            assert ((ephemeris_sequence >= 5000) and ephemeris_sequence <= 10000), 'Ephemeris sequence must be between 5000 and 10000'
+        elif (cpf_version == 2):
+            assert ((ephemeris_sequence >= 0) and ephemeris_sequence <= 366), 'Ephemeris sequence must be between 0 and 366'
+            assert ((sub_daily_eph_seq >= 0) and (sub_daily_eph_seq <= 99)), 'Sub-daily Ephemeris sequence must be between 0 and 99'
 
-    with open(cpf_filename, 'w') as f:
-        f.write(
-            f'H1 CPF  1  {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:04} {target_name:10}           \n')
-        f.write(
-            f'H2 {cospar_id}  {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0\n')
-        f.write('H9\n')
+        with open(cpf_filename, 'w') as f:
+            if (cpf_version == 1):
+                f.write(
+                    f'H1 CPF  1  {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:04} {target_name:10}           \n')
+                f.write(
+                    f'H2  {cospar_id} {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0\n')
+            elif (cpf_version == 2):
+                f.write(
+                    f'H1 CPF  2 {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:03} {sub_daily_eph_seq:02} {target_name:10}           \n')
+                f.write(
+                    f'H2  {cospar_id} {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0  1\n')
+            f.write('H9\n')
 
-        for key, values in cpf_df.iterrows():
-            f.write(
-                f"10 0 {values['mjd_days']} {values['seconds_of_day']:13.6f}  0  {values['x']:16.3f} {values['y']:16.3f} {values['z']:16.3f}\n")
+            for key, values in cpf_df.iterrows():
+                f.write(
+                    f"10 0 {values['mjd_days']} {values['seconds_of_day']:13.6f}  0  {values['x']:16.3f} {values['y']:16.3f} {values['z']:16.3f}\n")
 
-        f.write('99')
-
-
-def orekitPV2dataframe(PV, currentDateTime):
-    import pandas as pd
-    pos = PV.getPosition()
-    vel = PV.getVelocity()
-    data = {'DateTimeUTC': currentDateTime,
-            'x': pos.getX(), 'y': pos.getY(), 'z': pos.getZ(),
-            'vx': vel.getX(), 'vy': vel.getY(), 'vz': vel.getZ()}
-    return pd.DataFrame(data, index=[currentDateTime])
+            f.write('99')

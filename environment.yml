@@ -1,21 +1,18 @@
 name: laserod
 channels:
-  - defaults
   - plotly
   - conda-forge
 dependencies:
   - python
-  - orekit
+  - orekit==12.0.1
   - jupyter
   - jupyterlab
   - requests # Used for making requests to the laser ranging data API
   - numpy
-  - numpy-base
   - pandas
   - matplotlib
-  - nodejs # For installing Jupyter lab extensions
   - plotly
-  - plotly-orca
+  - python-kaleido
   - psutil
   - pip
   - pip:
