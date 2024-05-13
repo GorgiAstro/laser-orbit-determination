@@ -1,5 +1,5 @@
 This project contains some example data files useful that may be used
-as an initial setup for the [Orekit library](http://www.orekit.org/).
+as an initial setup for the [Orekit library](https://www.orekit.org/).
 
 In order to use these files, simply download the
 [latest archive](https://gitlab.orekit.org/orekit/orekit-data/-/archive/master/orekit-data-master.zip)
@@ -9,20 +9,22 @@ the start of your program:
 
 ```java
 File orekitData = new File("/path/to/the/folder/orekit-data");
-DataProvidersManager manager = DataProvidersManager.getInstance();
+DataProvidersManager manager = DataContext.getDefault().getDataProvidersManager();
 manager.addProvider(new DirectoryCrawler(orekitData));
 ```
 
 This zip file contains:
 
-  * JPL DE 430 ephemerides from 1990 to 2069,
-  * IERS Earth orientation parameters from 1973 to mid 2019
-    with predicted data to late 2019 (both IAU-1980 and IAU-2000),
-  * configuration data for ITRF versions used in regular IERS files,
-  * UTC-TAI history from 1972 to end of 2019,
-  * Marshall Solar Activity Future Estimation from 1999 to June 2019,
-  * the Eigen 6S gravity field
-  * the FES 2004 ocean tides model.
+* JPL DE 440 ephemerides from 1990 to 2149 (more accurate than DE441 for current dates),
+* IERS Earth orientation parameters from 1973 to March 2024
+  with predicted data up to late 2023 (both IAU-1980 and IAU-2000),
+* configuration data for ITRF versions used in regular IERS files,
+* leap seconds history from 1972 to mid 2024,
+* Marshall Solar Activity Future Estimation from 1999 to March 2024,
+* CSSI Space Weather Data with observed data from 1957 to March 2024
+  with predicted data up to 22 years in the future
+* the Eigen 6S gravity field
+* the FES 2004 ocean tides model.
 
 The provided archive is just a convenience, it is intended as a starting
 point for Orekit setup. Users are responsible to update the files in
@@ -31,5 +33,23 @@ NASA... This is why we suggest to rename `orekit-data-master`
 into `orekit-data` to show that the live data folder is decorrelated
 from the initial master folder.
 
-There is *NO* guarantee that this conveninence archive will be updated
+The update.sh script is a bash script that allows to update the data
+automatically by uploading individual files from the sites of the
+laboratories that generate them, regardless of these files being
+updated in Orekit git repository. It is in fact the script the Orekit
+team uses to update the repository.
+
+There is *NO* guarantee that this convenience archive will be updated
 or even provided in the future.
+
+## Notes for Orekit Python users
+
+You can download this orekit data repository via pip (don't forget to activate your conda environment containing orekit beforehand):
+
+```bash
+pip install git+https://gitlab.orekit.org/orekit/orekit-data.git
+```
+
+This will install a Python library named `orekitdata`. The Python library receives a new version tag at every commit in this repository so that your Python project can pull the newest version of the orekit data every time this repository is updated. The 7 last characters of the version tag correspond to the 7 first characters of the git hash of the commit: for instance the Python version `orekitdata-0+untagged.70.g91b2c79` correspond to the commit of the `master` branch of this repository with a githash starting with `91b2c79`.
+
+Then to pass the data folder to Orekit in Python, follow the instructions in the [Python wrapper Wiki](https://gitlab.orekit.org/orekit-labs/python-wrapper/-/wikis/installation#physical-data).
