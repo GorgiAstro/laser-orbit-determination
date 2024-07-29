@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - orekit==12.0.1
+  - orekit==12.1.1
   - jupyter
   - jupyterlab
   - requests # Used for making requests to the laser ranging data API
