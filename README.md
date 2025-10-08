@@ -7,30 +7,19 @@ The open-source orbital dynamics library Orekit (https://www.orekit.org/) is use
 # Installation
 ## Notes on Orekit versions
 
-The Orekit example notebooks are based on Orekit 12.1.1 (previously 10.2 IIRC). The Orekit version is frozen in `requirements.txt` to avoid breaking changes due to new Orekit major releases.
+The Orekit example notebooks are based on Orekit 12.1.1 (previously 10.2 IIRC). The Orekit version is frozen in `pyproject.toml` to avoid breaking changes due to new Orekit major releases.
 
 ## Prerequisites
 
 * Python 3.7+
+* `uv` as package manager
 
 ## Create a venv and install dependencies
 
-Create a venv:
+Now with `uv` it's easier:
 
 ```bash
-python -m venv .venv
-```
-
-Enter the venv:
-
-```bash
-source .venv/bin/activate
-```
-
-Install the dependencies:
-
-```bash
-python -m pip install -r requirements.txt
+uv sync
 ```
 
 # Use
