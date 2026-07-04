@@ -9,7 +9,7 @@ dependencies = [
     "jupyterlab>=4.4.9",
     "kaleido>=1.1.0",
     "numpy>=2.2",
-    "orekit-jpype>=13.1.2.1",
+    "orekit-jpype>=13.1.5.0",
     "orekitdata",
     "pandas>=2.3.3",
     "plotly>=6.3.1",
