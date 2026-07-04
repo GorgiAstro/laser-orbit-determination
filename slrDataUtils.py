@@ -11,11 +11,17 @@ from orekit_jpype.pyhelpers import absolutedate_to_datetime
 from org.orekit.time import AbsoluteDate
 from org.orekit.time import TimeScalesFactory
 
+
 class SlrDlManager:
     c = 299792458  # m/s
     utc = TimeScalesFactory.getUTC()
 
-    def __init__(self, username_edc: str, password_edc: str, url: str = 'https://edc.dgfi.tum.de/api/v1/') -> None:
+    def __init__(
+        self,
+        username_edc: str,
+        password_edc: str,
+        url: str = "https://edc.dgfi.tum.de/api/v1/",
+    ) -> None:
         self.username_edc = username_edc
         self.password_edc = password_edc
         self.url = url
@@ -31,11 +37,11 @@ class SlrDlManager:
             - columns: see section "Data query" for CPF data at https://edc.dgfi.tum.de/en/api/doc/
         """
         search_args = {}
-        search_args['username'] = self.username_edc
-        search_args['password'] = self.password_edc
-        search_args['action'] = 'data-query'
-        search_args['data_type'] = 'CPF'
-        search_args['satellite'] = cosparId
+        search_args["username"] = self.username_edc
+        search_args["password"] = self.password_edc
+        search_args["action"] = "data-query"
+        search_args["data_type"] = "CPF"
+        search_args["satellite"] = cosparId
 
         datasetList = pd.DataFrame()
 
@@ -43,17 +49,25 @@ class SlrDlManager:
         while len(search_data) == 0:
             # Looping in case no CPF prediction is available on the desired day
 
-            search_args['start_data_date'] = '{:%Y-%m-%d}%'.format(startDate)  # Data will start at midnight
+            search_args["start_data_date"] = "{:%Y-%m-%d}%".format(
+                startDate
+            )  # Data will start at midnight
             search_response = requests.post(self.url, data=search_args)
 
             if search_response.status_code == 200:
                 search_data = json.loads(search_response.text)
 
                 for observation in search_data:
-                    startDataDate = datetime.strptime(observation['start_data_date'], '%Y-%m-%d %H:%M:%S')
-                    endDataDate = datetime.strptime(observation['end_data_date'], '%Y-%m-%d %H:%M:%S')
+                    startDataDate = datetime.strptime(
+                        observation["start_data_date"], "%Y-%m-%d %H:%M:%S"
+                    )
+                    endDataDate = datetime.strptime(
+                        observation["end_data_date"], "%Y-%m-%d %H:%M:%S"
+                    )
 
-                    leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
+                    leDataSet = pd.DataFrame.from_records(
+                        observation, index=[int(observation["id"])]
+                    )
                     datasetList = pd.concat([datasetList, leDataSet])
 
             else:
@@ -62,7 +76,7 @@ class SlrDlManager:
 
             startDate = startDate - timedelta(days=1)
 
-        datasetList.drop('id', axis=1, inplace=True)
+        datasetList.drop("id", axis=1, inplace=True)
 
         return datasetList
 
@@ -79,35 +93,43 @@ class SlrDlManager:
             - columns 'x', 'y', and 'z': float, satellite position in ITRF frame in meters
         """
         dl_args = {}
-        dl_args['username'] = self.username_edc
-        dl_args['password'] = self.password_edc
-        dl_args['action'] = 'data-download'
-        dl_args['data_type'] = 'CPF'
+        dl_args["username"] = self.username_edc
+        dl_args["password"] = self.password_edc
+        dl_args["action"] = "data-download"
+        dl_args["data_type"] = "CPF"
 
-        cpfDataFrame = pd.DataFrame(columns=['x', 'y', 'z'])
+        cpfDataFrame = pd.DataFrame(columns=["x", "y", "z"])
 
         for datasetId in datasetIdList:
-            dl_args['id'] = str(datasetId)
+            dl_args["id"] = str(datasetId)
             dl_response = requests.post(self.url, data=dl_args)
 
             if dl_response.status_code == 200:
                 """ convert json string in python list """
                 data = json.loads(dl_response.text)
 
-                currentLine = ''
+                currentLine = ""
                 i = 0
                 n = len(data)
 
-                while (not currentLine.startswith('10')) and i < n:  # Reading lines until the H4 header
+                while (
+                    not currentLine.startswith("10")
+                ) and i < n:  # Reading lines until the H4 header
                     currentLine = data[i]
                     i += 1
 
-                while currentLine.startswith('10') and i < n:
+                while currentLine.startswith("10") and i < n:
                     lineData = currentLine.split()
                     mjd_day = int(lineData[2])
                     secondOfDay = float(lineData[3])
-                    position_ecef = [float(lineData[5]), float(lineData[6]), float(lineData[7])]
-                    absolutedate = AbsoluteDate.createMJDDate(mjd_day, secondOfDay, self.utc)
+                    position_ecef = [
+                        float(lineData[5]),
+                        float(lineData[6]),
+                        float(lineData[7]),
+                    ]
+                    absolutedate = AbsoluteDate.createMJDDate(
+                        mjd_day, secondOfDay, self.utc
+                    )
                     currentdatetime = absolutedate_to_datetime(absolutedate)
 
                     if (currentdatetime >= startDate) and (currentdatetime <= endDate):
@@ -136,19 +158,19 @@ class SlrDlManager:
         """
         # dataType: 'NPT' or 'FRD'
         search_args = {}
-        search_args['username'] = self.username_edc
-        search_args['password'] = self.password_edc
-        search_args['action'] = 'data-query'
-        search_args['data_type'] = dataType
-        search_args['satellite'] = cosparId
+        search_args["username"] = self.username_edc
+        search_args["password"] = self.password_edc
+        search_args["action"] = "data-query"
+        search_args["data_type"] = dataType
+        search_args["satellite"] = cosparId
 
         if station is not None:
-            search_args['station'] = station
+            search_args["station"] = station
 
         datasetList = pd.DataFrame()
 
-        search_args['start_data_date'] = '{:%Y}%'.format(startDate - timedelta(days=1))
-        search_args['end_data_date'] = '{:%Y}%'.format(endDate + timedelta(days=1))
+        search_args["start_data_date"] = "{:%Y}%".format(startDate - timedelta(days=1))
+        search_args["end_data_date"] = "{:%Y}%".format(endDate + timedelta(days=1))
 
         search_response = requests.post(self.url, data=search_args)
 
@@ -156,27 +178,34 @@ class SlrDlManager:
             search_data = json.loads(search_response.text)
 
             for observation in search_data:
-                startDataDate = datetime.strptime(observation['start_data_date'], '%Y-%m-%d %H:%M:%S')
-                endDataDate = datetime.strptime(observation['end_data_date'], '%Y-%m-%d %H:%M:%S')
-                #print('Observation Id: {}  -  Station: {}  -  Date: {}'.format(observation['id'],
+                startDataDate = datetime.strptime(
+                    observation["start_data_date"], "%Y-%m-%d %H:%M:%S"
+                )
+                endDataDate = datetime.strptime(
+                    observation["end_data_date"], "%Y-%m-%d %H:%M:%S"
+                )
+                # print('Observation Id: {}  -  Station: {}  -  Date: {}'.format(observation['id'],
                 #                                                               observation['station'],
                 #                                                               observation['end_data_date']))
 
                 if (startDataDate >= startDate) and (
-                        endDataDate <= endDate):  # Only taking the values within the date range
-
-                    leDataSet = pd.DataFrame.from_records(observation, index=[int(observation['id'])])
-                    datasetList = pd.concat([datasetList, leDataSet], ignore_index=False)
+                    endDataDate <= endDate
+                ):  # Only taking the values within the date range
+                    leDataSet = pd.DataFrame.from_records(
+                        observation, index=[int(observation["id"])]
+                    )
+                    datasetList = pd.concat(
+                        [datasetList, leDataSet], ignore_index=False
+                    )
 
         else:
             print(search_response.status_code)
             print(search_response.text)
 
         if not datasetList.empty:
-            datasetList.drop('id', axis=1, inplace=True)
+            datasetList.drop("id", axis=1, inplace=True)
 
         return datasetList
-
 
     def dlAndParseSlrData(self, dataType, datasetList, out_folder):
         """
@@ -191,25 +220,25 @@ class SlrDlManager:
             - station-id: str, 8-digit id of the ground station
             - range: float, range in meters between ground station and satellite at bounce time
             - wavelength_microm: float, wavelength in micrometers. To be used for ionospheric delay model
-            - pressure_mbar: float, pressure in millibars. To be used for ionospheric delay model
+            - pressure_pa: float, pressure in Pa. To be used for ionospheric delay model
             - temperature_K: float, temperature in Kelvin. To be used for ionospheric delay model
-            - humidity: float, humidity [0.0-1.0]. To be used for ionospheric delay model
+            - humidity_pa: float, humidity [0.0-1.0]. To be used for ionospheric delay model
         """
         if not os.path.exists(out_folder):
             os.makedirs(out_folder)
 
         dl_args = {}
-        dl_args['username'] = self.username_edc
-        dl_args['password'] = self.password_edc
-        dl_args['action'] = 'data-download'
-        dl_args['data_type'] = dataType
+        dl_args["username"] = self.username_edc
+        dl_args["password"] = self.password_edc
+        dl_args["action"] = "data-download"
+        dl_args["data_type"] = dataType
 
         crd_parser = CRDParser()
         slr_dict = {}
         for datasetId, dataset in datasetList.iterrows():
-            filename = os.path.join(out_folder, f'{datasetId}.{dataType.lower()}')
+            filename = os.path.join(out_folder, f"{datasetId}.{dataType.lower()}")
             if not os.path.isfile(filename):
-                dl_args['id'] = str(datasetId)
+                dl_args["id"] = str(datasetId)
                 dl_response = requests.post(self.url, data=dl_args)
 
                 if dl_response.status_code != 200:
@@ -217,9 +246,8 @@ class SlrDlManager:
 
                 dl_data = dl_response.json()
 
-                with open(filename, 'w') as f:
-                    f.writelines([l + '\n' for l in dl_data])
-
+                with open(filename, "w") as f:
+                    f.writelines([l + "\n" for l in dl_data])
 
             crd = crd_parser.parse(DataSource(filename))
 
@@ -239,23 +267,58 @@ class SlrDlManager:
                     elif range_meas.getEpochEvent() == 2:  # meas_time = ground transmit
                         receiveTime = meas_time.shiftedBy(timeOfFlight)
                     else:
-                        print(f'Warning, unusual epoch indicator {range_meas.getEpochEvent()}')
+                        print(
+                            f"Warning, unusual epoch indicator {range_meas.getEpochEvent()}"
+                        )
 
                     r = self.c * timeOfFlight / 2
 
                     meteo_meas = meteo_data.getMeteo(meas_time)
 
-                    slr_dict[meas_time] = [str(crd_header.getSystemIdentifier()),
-                                        r, 1e6 * sys_record.getWavelength(),
-                                        1e3 * meteo_meas.getPressure(), meteo_meas.getTemperature(), 1e-2*meteo_meas.getHumidity()]
+                    slr_dict[meas_time] = [
+                        str(crd_header.getSystemIdentifier()),
+                        r,
+                        1e6 * sys_record.getWavelength(),
+                        1e5 * meteo_meas.getPressure(),
+                        meteo_meas.getTemperature(),
+                        1e-2
+                        * meteo_meas.getHumidity()
+                        * 1e5
+                        * meteo_meas.getPressure(),
+                    ]
 
-        slrDataFrame = pd.DataFrame.from_dict(slr_dict,orient='index',columns=['station-id', 'range', 'wavelength_microm', 'pressure_mbar', 'temperature_K', 'humidity'])
+        slrDataFrame = pd.DataFrame.from_dict(
+            slr_dict,
+            orient="index",
+            columns=[
+                "station-id",
+                "range",
+                "wavelength_microm",
+                "pressure_pa",
+                "temperature_K",
+                "humidity_pa",
+            ],
+        )
 
         return slrDataFrame
 
-
-    def write_cpf(self, cpf_df, cpf_filename, ephemeris_source, production_date, ephemeris_sequence, target_name, cospar_id,
-                sic, norad_id, ephemeris_start_date, ephemeris_end_date, step_time, cpf_version=1, sub_daily_eph_seq=0):
+    def write_cpf(
+        self,
+        cpf_df,
+        cpf_filename,
+        ephemeris_source,
+        production_date,
+        ephemeris_sequence,
+        target_name,
+        cospar_id,
+        sic,
+        norad_id,
+        ephemeris_start_date,
+        ephemeris_end_date,
+        step_time,
+        cpf_version=1,
+        sub_daily_eph_seq=0,
+    ):
         """
         DEPRECATED, THIS FUNCTION WRITES CPF DATA MANUALLY; INSTEAD, OREKIT SHOULD BE USED FOR THAT
         Writes satellite position data to a Consolidated prediction file.
@@ -283,29 +346,42 @@ class SlrDlManager:
         :param sub_daily_eph_seq: int, optional, only for CPF version 2. Must be below 99
         """
 
-        assert(cpf_version in [1, 2])
-        assert (len(ephemeris_source) == 3), 'Ephemeris source must be a string with exactly 3 characters'
-        if (cpf_version == 1):
-            assert ((ephemeris_sequence >= 5000) and ephemeris_sequence <= 10000), 'Ephemeris sequence must be between 5000 and 10000'
-        elif (cpf_version == 2):
-            assert ((ephemeris_sequence >= 0) and ephemeris_sequence <= 366), 'Ephemeris sequence must be between 0 and 366'
-            assert ((sub_daily_eph_seq >= 0) and (sub_daily_eph_seq <= 99)), 'Sub-daily Ephemeris sequence must be between 0 and 99'
+        assert cpf_version in [1, 2]
+        assert len(ephemeris_source) == 3, (
+            "Ephemeris source must be a string with exactly 3 characters"
+        )
+        if cpf_version == 1:
+            assert (ephemeris_sequence >= 5000) and ephemeris_sequence <= 10000, (
+                "Ephemeris sequence must be between 5000 and 10000"
+            )
+        elif cpf_version == 2:
+            assert (ephemeris_sequence >= 0) and ephemeris_sequence <= 366, (
+                "Ephemeris sequence must be between 0 and 366"
+            )
+            assert (sub_daily_eph_seq >= 0) and (sub_daily_eph_seq <= 99), (
+                "Sub-daily Ephemeris sequence must be between 0 and 99"
+            )
 
-        with open(cpf_filename, 'w') as f:
-            if (cpf_version == 1):
+        with open(cpf_filename, "w") as f:
+            if cpf_version == 1:
                 f.write(
-                    f'H1 CPF  1  {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:04} {target_name:10}           \n')
+                    f"H1 CPF  1  {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:04} {target_name:10}           \n"
+                )
                 f.write(
-                    f'H2  {cospar_id} {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0\n')
-            elif (cpf_version == 2):
+                    f"H2  {cospar_id} {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0\n"
+                )
+            elif cpf_version == 2:
                 f.write(
-                    f'H1 CPF  2 {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:03} {sub_daily_eph_seq:02} {target_name:10}           \n')
+                    f"H1 CPF  2 {ephemeris_source} {production_date:%Y %m %d %H}  {ephemeris_sequence:03} {sub_daily_eph_seq:02} {target_name:10}           \n"
+                )
                 f.write(
-                    f'H2  {cospar_id} {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0  1\n')
-            f.write('H9\n')
+                    f"H2  {cospar_id} {sic}    {norad_id} {ephemeris_start_date:%Y %m %d %H %M %S} {ephemeris_end_date:%Y %m %d %H %M %S} {step_time:5} 1 1  0 0 0  1\n"
+                )
+            f.write("H9\n")
 
             for key, values in cpf_df.iterrows():
                 f.write(
-                    f"10 0 {values['mjd_days']} {values['seconds_of_day']:13.6f}  0  {values['x']:16.3f} {values['y']:16.3f} {values['z']:16.3f}\n")
+                    f"10 0 {values['mjd_days']} {values['seconds_of_day']:13.6f}  0  {values['x']:16.3f} {values['y']:16.3f} {values['z']:16.3f}\n"
+                )
 
-            f.write('99')
+            f.write("99")
