@@ -1,25 +1,31 @@
-%=SNX 2.02 JCT 23:073:72000 JCT 68:041:00000 23:060:00000 L 00553 0 X        
-+FILE/REFERENCE                                                                 
- DESCRIPTION        XYZ 230314 ILRS eccentricities file
- OUTPUT             ILRS SINEX Formatted Eccentricity File                 
- CONTACT            epavlis@UMBC.edu                                       
- SOFTWARE           JCET's eccCDDIS2snx
- HARDWARE           Apple MacBook Pro                                              
- INPUT              Official Eccentricity file from CDDIS (110707)
- INPUT              and previous version slrecc.191030.ILRS.xyz.snx                            
- INPUT              Numerous emails/reports from Van Husson’s review                            
- INPUT              and station-submitted site logs                            
--FILE/REFERENCE                                                                 
-+INPUT/HISTORY                                                                  
- =SNX 2.02 JCT 23:073:72000 JCT 68:041:00000 23:060:00000 L 00553 0 X        
--INPUT/HISTORY                                                                  
+%=SNX 2.02 DGF 25:145:12000 DGF 68:041:00000 00:000:00000 L 00557 0 X
+*-----------------------------------------------------------------------------------------
++FILE/REFERENCE
+ DESCRIPTION        XYZ 250513 ILRS eccentricities file
+ OUTPUT             ILRS SINEX Formatted Eccentricity File
+ CONTACT            mathis.blossfeld@tum.de
+ SOFTWARE           DOGS-OC 5.5 (23-11-14) and DOGS-CS 5.1 (24-01-12)
+ HARDWARE           AMD EPYC 7702P 64-Core Processor @ 2.10GHz,
+                    256 GByte Mem., 128 CPUs, Ubuntu 22.04.1 LTS
+ INPUT              Official ILRS eccentricity file (version: 250513) based on the
+                    previous version (slrecc.250408.ILRS.xyz.snx) and updates.
+-FILE/REFERENCE
+*-----------------------------------------------------------------------------------------
++INPUT/HISTORY
+ =SNX 2.02 DGF 25:145:12000 DGF 68:041:00000 25:145:00000 L 00557 0 X
+-INPUT/HISTORY
+*-----------------------------------------------------------------------------------------
 +FILE/COMMENT
 *
-* LAST UPDATE 14 Mar., 2023, Added Tsukuba (7306), Metsahovi (7807),
-*                     Stuttgart SMIL (7816), and Yebes YLARA (7817)
+* LAST UPDATE 13 May, 2025, Added new site Ishioka (7317).
 *
-*   Note:   Information for Metsahovi (7807), Stuttgart SMIL (7816),
-*           and Yebes YLARA (7817) are very preliminary !!!
+* UPDATED 08 Apr., 2025, Added new site Xian (7329).
+*
+* UPDATED 05 Jul., 2024, Added new eccentricity for Greenbelt (7105); reported by 
+*                        V. Husson.
+*
+* UPDATED 14 Mar., 2023, Added Tsukuba (7306), Metsahovi (7807), Stuttgart SMIL (7816),
+*                        and Yebes YLARA (7817)
 *
 * UPDATED 29 Apr., 2022, Corrected the eccentricity for MOB6 for 
 *                            errors reported by IGN in their 2020
@@ -274,6 +280,7 @@
 *       respectively.
 *
 -FILE/COMMENT
+*-----------------------------------------------------------------------------------------
 +SITE/ID                                                                        
 *Code PT __DOMES__ T _STATION DESCRIPTION__ APPROX_LON_ APPROX_LAT_ _APP_H_     CDP-SOD_
  1148  A   ---     L Ondrejov   OND. FIXED   14 47 08.1  49 54 49.3   592.6     11480901
@@ -548,11 +555,13 @@
  7308  A 21704S002 L Koganei    CRLLAS      139 29 20.8  35 42 36.3   123.1     73085001
  7309  A   ---     L Hachijo Ji HTLRS-1     139 49 22.1  33  4 22.7   264.1     73091701
  7313  A   ---     L Hiroo      HTLRS-1     143 19 42.4  42 19  4.1    46.1     73131701
+ 7317  A 21791M008 L Ishioka    ISHL        140 13  5.2  36 12 32.4   156.5     73179501
  7320  A   ---     L Wakkanai   HTLRS-1     141 43 47.8  45 23  9.5    91.6     73201701
  7321  A   ---     L Oga        HTLRS-1     139 42  6.2  40  0 16.7    69.4     73211701
  7322  A   ---     L Tyosi      HTLRS-1     140 51 12.4  35 42 17.8    90.1     73221701
  7323  A   ---     L Makura Sak HTLRS-1     130 17 35.4  31 16 19.2    62.7     73231701
  7328  A 21704M001 L Koganei    KOGLAS      139 29 16.6  35 42 36.6   115.1     73287101
+ 7329  A 21614S001 L Xian       NTSC        109 12 51.8  34 21  6.1   940.3     73298401
  7335  A 21701M002 L Kashima    KASH. FIXD  140 39 27.3  35 57 22.2    66.4     73357201
  7337  A 21739M001 L Miura      MIULAS      139 39  1.4  35 12 24.2    99.1     73377301
  7339  A 21740M001 L Tateyama   TATLAS      139 50 53.3  34 56 12.9   120.3     73397401
@@ -817,6 +826,7 @@
  8833  A 13504M002 L Kootwijk   MTLRS-2       5 48 36.6  52 10 41.4    89.2     88331607
  8834  A 14201S018 L Wettzell   WLRS         12 52 40.8  49  8 39.9   666.0     88341001
 -SITE/ID
+*-----------------------------------------------------------------------------------------
 +SITE/ECCENTRICITY
 *SITE PT SOLN T DATA_START__ DATA_END____ XYZ X_______ Y_______ Z_______        CDP-SOD_
  1148  A    1 L 88:001:00000 91:365:86399 XYZ   0.0000   0.0000   0.0000        11480901
@@ -979,7 +989,8 @@
  7105  A    1 L 92:192:00000 99:031:86399 XYZ   0.5280  -2.3870   1.9670        71050724
  7105  A    1 L 99:032:00000 07:304:86399 XYZ   0.5240  -2.3850   1.9700        71050725
  7105  A    1 L 07:305:00000 12:151:86399 XYZ   0.5240  -2.3850   1.9700        71050725
- 7105  A    1 L 12:152:00000 00:000:00000 XYZ   0.5250  -2.3865   1.9689        71050725
+ 7105  A    1 L 12:152:00000 24:089:86399 XYZ   0.5250  -2.3865   1.9689        71050725
+ 7105  A    1 L 24:090:00000 00:000:00000 XYZ   0.5252  -2.3878   1.9695        71050725
  7106  A    1 L 90:001:00000 00:000:00000 XYZ   0.0000   0.0000   0.0000        71065601
  7109  A    1 L 81:274:00000 82:210:86399 XYZ  -1.2570  -2.1190   2.0810        71090801
  7109  A    1 L 82:227:00000 85:070:86399 XYZ  -1.2380  -2.0860   1.9960        71090802
@@ -1102,11 +1113,13 @@
  7308  A    1 L 90:001:00000 00:000:00000 XYZ   0.0000   0.0000   0.0000        73085001
  7309  A    1 L 93:032:00000 93:090:86399 XYZ  18.8350  10.9820  13.5500        73091701
  7313  A    1 L 91:213:00000 91:304:86399 XYZ   1.7020  13.6900  -4.7320        73131701
+ 7317  A    1 L 25:040:00000 00:000:00000 XYZ  -0.9554   0.7955   0.9102        73179501
  7320  A    1 L 92:214:00000 92:305:86399 XYZ -10.0300   0.5140  -5.5840        73201701
  7321  A    1 L 94:152:00000 94:304:86399 XYZ -96.1820 146.6960-197.0650        73211701
  7322  A    1 L 95:305:00000 96:091:86399 XYZ  54.3430 109.0340 -44.2990        73221701
  7323  A    1 L 94:001:00000 94:090:86399 XYZ 232.2710 613.6040-571.6530        73231701
  7328  A    1 L 96:061:00000 01:031:86399 XYZ -20.2130 -21.0040  12.9950        73287101
+ 7329  A    1 L 25:098:00000 00:000:00000 XYZ   0.0000   0.0000   0.0000        73298401
  7335  A    1 L 96:061:00000 01:031:86399 XYZ   0.7970  -2.6340  10.7190        73357201
  7337  A    1 L 96:061:00000 00:152:86399 XYZ -10.1840  -8.6830   4.6870        73377301
  7339  A    1 L 96:061:00000 01:304:86399 XYZ  -9.5930  -1.4970  -1.3270        73397401
@@ -1374,4 +1387,5 @@
  8833  A    1 L 95:079:00000 95:243:86399 XYZ   0.2190   0.0230  -0.0710        88331607
  8834  A    1 L 90:244:00000 00:000:00000 XYZ   0.0000   0.0000   0.0000        88341001
 -SITE/ECCENTRICITY
+*-----------------------------------------------------------------------------------------
 %ENDSNX
